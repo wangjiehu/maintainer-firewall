@@ -84,6 +84,8 @@ comment:
 ignore:
   authors:
     - dependabot[bot]
+    - renovate[bot]
+    - github-actions[bot]
   labels:
     - skip-firewall
   titlePatterns:

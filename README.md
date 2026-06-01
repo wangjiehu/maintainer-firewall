@@ -9,7 +9,7 @@ It does not try to prove whether a contribution was AI-generated. Instead, it as
 Each run produces a compact review-readiness report:
 
 - An outcome such as `Needs contributor info`, `Needs tests`, or `Ready for maintainer review`
-- A 0-100 quality score
+- A 0-100 review-readiness score
 - A short maintainer-facing headline
 - Contributor-friendly next steps
 - A collapsible finding table
@@ -35,6 +35,8 @@ The default mode is intentionally low-noise: it writes a comment only when there
 
 CODEOWNERS support is best-effort and intended for routing hints, not as a replacement for GitHub's protected review enforcement.
 
+This repository dogfoods Maintainer Firewall on its own issues and pull requests. The workflow does not check out pull request code.
+
 ## Quick start
 
 Create `.github/workflows/maintainer-firewall.yml`:
@@ -44,20 +46,24 @@ name: Maintainer Firewall
 
 on:
   issues:
-    types: [opened, edited, reopened]
+    types: [opened, edited, reopened, labeled, unlabeled]
   pull_request_target:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
 permissions:
   contents: read
   issues: write
   pull-requests: write
 
+concurrency:
+  group: maintainer-firewall-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   firewall:
     runs-on: ubuntu-latest
     steps:
-      - uses: wangjiehu/maintainer-firewall@v0.1.0
+      - uses: wangjiehu/maintainer-firewall@v0.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -67,11 +73,12 @@ Add `.maintainer-firewall.yml` to customize thresholds, labels, and optional AI 
 Use `pull_request_target` when you want the action to comment on pull requests from forks. Maintainer Firewall does not check out pull request code, and it loads configuration from the base ref. If you add checkout or custom scripts to the same job, do not run untrusted pull request code with write permissions.
 
 The action also writes the report to the GitHub Actions step summary by default. Set `write-step-summary: false` to disable that.
+The `labeled` and `unlabeled` events let ignore labels such as `skip-firewall` and stale label cleanup take effect immediately.
 
 Set `report-json-path` when another workflow step should consume a structured report:
 
 ```yaml
-      - uses: wangjiehu/maintainer-firewall@v0.1.0
+      - uses: wangjiehu/maintainer-firewall@v0.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-json-path: maintainer-firewall-report.json
@@ -94,7 +101,7 @@ Do not combine `pull_request_target`, write permissions, and a checkout of untru
 Maintainer Firewall works without an OpenAI API key. To enable AI-assisted semantic checks, set `ai.enabled: true` in `.maintainer-firewall.yml` and pass an API key:
 
 ```yaml
-      - uses: wangjiehu/maintainer-firewall@v0.1.0
+      - uses: wangjiehu/maintainer-firewall@v0.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -109,7 +116,7 @@ When AI analysis is enabled, Maintainer Firewall also loads configured repositor
 Start in dry-run mode if you want to inspect reports without writing comments or labels:
 
 ```yaml
-      - uses: wangjiehu/maintainer-firewall@v0.1.0
+      - uses: wangjiehu/maintainer-firewall@v0.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: true
@@ -125,7 +132,7 @@ Maintainer Firewall sets outputs on every handled issue or pull request:
 
 | Output | Description |
 | --- | --- |
-| `outcome` | Review-readiness outcome such as `ready`, `needs_info`, `needs_tests`, `needs_maintainer_review`, or `blocked`. |
+| `outcome` | Review-readiness outcome such as `ready`, `needs_info`, `needs_tests`, `needs_maintainer_review`, `blocked`, or `skipped`. |
 | `score` | Review-readiness score from 0 to 100. |
 | `findings-count` | Number of findings from enabled checks. |
 | `labels` | Comma-separated suggested labels. |
@@ -185,9 +192,17 @@ security:
     - "\\bXSS\\b"
     - "\\btoken leak\\b"
   secretPatterns:
+    - "\\bgithub_pat_[A-Za-z0-9_]{20,}\\b"
     - "\\bgh[pousr]_[A-Za-z0-9_]{36,}\\b"
     - "\\bsk-[A-Za-z0-9_-]{20,}\\b"
+    - "\\bglpat-[A-Za-z0-9_-]{20,}\\b"
+    - "\\bnpm_[A-Za-z0-9]{20,}\\b"
+    - "\\bAIza[0-9A-Za-z\\-_]{35}\\b"
     - "\\bAKIA[0-9A-Z]{16}\\b"
+    - "\\bxox[baprs]-[A-Za-z0-9-]{20,}\\b"
+    - "\\bSG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}\\b"
+    - "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b"
+    - "\\b-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----\\b"
 
 labels:
   needsInfo: needs-info
@@ -213,6 +228,8 @@ comment:
 ignore:
   authors:
     - dependabot[bot]
+    - renovate[bot]
+    - github-actions[bot]
   labels:
     - skip-firewall
   titlePatterns:
@@ -247,8 +264,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internal flow and saf
 ```bash
 npm run check
 npm run verify:dist
-git tag v0.1.0
-git push origin main v0.1.0
+git tag v0.1.1
+git push origin main v0.1.1
 ```
 
 The release workflow publishes GitHub release notes for `v*` tags.

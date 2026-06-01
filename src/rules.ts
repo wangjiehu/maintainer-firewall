@@ -1,4 +1,5 @@
 import { minimatch } from "minimatch";
+import { redactByPatterns } from "./redaction.js";
 import type {
   ChangedFile,
   Finding,
@@ -72,7 +73,7 @@ function analyzeIssue(issue: IssueSubject, config: FirewallConfig): Finding[] {
         id: "issue.duplicate.possible",
         severity: "notice",
         title: "Possible duplicate issue",
-        details: `A similar issue exists: #${topCandidate.number} "${topCandidate.title}" (${Math.round(topCandidate.similarity * 100)}% title overlap).`,
+        details: `A similar issue exists: #${topCandidate.number} "${redactByPatterns(topCandidate.title, config.security.secretPatterns)}" (${Math.round(topCandidate.similarity * 100)}% title overlap).`,
         suggestion: `Compare with ${topCandidate.url} before starting a new investigation.`,
         label: "possibleDuplicate",
         source: "rule"

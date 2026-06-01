@@ -15,3 +15,13 @@ pullRequest:
 
 ai:
   enabled: false
+
+ignore:
+  authors:
+    - dependabot[bot]
+    - renovate[bot]
+    - github-actions[bot]
+  labels:
+    - skip-firewall
+  titlePatterns:
+    - "^\\[skip firewall\\]"

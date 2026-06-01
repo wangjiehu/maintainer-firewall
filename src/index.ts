@@ -2,7 +2,7 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { analyzeWithAi } from "./ai.js";
 import { loadCodeOwnerHints } from "./codeowners.js";
-import { composeReport, shouldFail, shouldPostComment } from "./comment.js";
+import { composeReport, shouldFail, shouldPostComment, shouldRefreshExistingCleanReport } from "./comment.js";
 import { loadConfig } from "./config.js";
 import { validateConfig } from "./diagnostics.js";
 import { loadRepositoryGuidance } from "./guidance.js";
@@ -11,7 +11,8 @@ import { staleManagedLabels } from "./labels.js";
 import { createReportPayload, writeReportJson } from "./report.js";
 import { createReviewSummary } from "./review.js";
 import { analyzeSubject } from "./rules.js";
-import { applyLabels, buildSubject, getConfigRef, removeLabels, upsertComment } from "./github-client.js";
+import { applyLabels, buildSubject, getConfigRef, hasReportComment, removeLabels, upsertComment } from "./github-client.js";
+import type { Finding, ReviewSummary } from "./types.js";
 
 async function run(): Promise<void> {
   const token = core.getInput("github-token", { required: true });
@@ -34,14 +35,28 @@ async function run(): Promise<void> {
   const subject = await buildSubject(octokit, github.context, config.issue.duplicateSearchLimit);
 
   if (!subject) {
-    core.info(`Maintainer Firewall does not handle event ${github.context.eventName}.`);
+    const skipReason = `event ${github.context.eventName} is not handled`;
+    setSkippedOutputs(skipReason, reportJsonPath);
+    const skippedReport = `## Maintainer Firewall report\n\nSkipped: ${skipReason}.`;
+    core.info(skippedReport);
+    if (writeStepSummary) {
+      await tryWrite("write step summary", async () => {
+        await core.summary.addRaw(skippedReport, true).write();
+      });
+    }
+
+    if (reportJsonPath) {
+      await tryWrite("write JSON report", () =>
+        writeReportJson(reportJsonPath, createReportPayload(null, [], null, config, skipReason))
+      );
+    }
+
     return;
   }
 
   const skipReason = getSkipReason(subject, config);
   if (skipReason) {
-    core.setOutput("skipped", "true");
-    core.setOutput("skip-reason", skipReason);
+    setSkippedOutputs(skipReason, reportJsonPath);
     const skippedReport = `## Maintainer Firewall report\n\nSkipped ${subject.kind} #${subject.number}: ${skipReason}.`;
     core.info(skippedReport);
     if (writeStepSummary) {
@@ -54,7 +69,6 @@ async function run(): Promise<void> {
       await tryWrite("write JSON report", () =>
         writeReportJson(reportJsonPath, createReportPayload(subject, [], null, config, skipReason))
       );
-      core.setOutput("report-json-path", reportJsonPath);
     }
 
     return;
@@ -83,12 +97,7 @@ async function run(): Promise<void> {
   const summary = createReviewSummary(subject, findings, config, routingHints);
   const report = composeReport(subject, findings, config, summary);
 
-  core.setOutput("skipped", "false");
-  core.setOutput("outcome", summary.outcome);
-  core.setOutput("score", String(summary.score));
-  core.setOutput("findings-count", String(findings.length));
-  core.setOutput("labels", summary.labels.join(","));
-  core.setOutput("routing-hints", JSON.stringify(summary.routingHints));
+  setCompletedOutputs(summary, findings, reportJsonPath);
 
   core.info(report);
   if (writeStepSummary) {
@@ -111,7 +120,11 @@ async function run(): Promise<void> {
       }
     }
 
-    if (shouldPostComment(config, findings)) {
+    const shouldUpdateExistingCleanReport =
+      shouldRefreshExistingCleanReport(config, findings) &&
+      await hasReportComment(octokit, owner, repo, subject.number);
+
+    if (shouldPostComment(config, findings) || shouldUpdateExistingCleanReport) {
       await tryWrite("upsert comment", () => upsertComment(
         octokit,
         owner,
@@ -129,7 +142,6 @@ async function run(): Promise<void> {
     await tryWrite("write JSON report", () =>
       writeReportJson(reportJsonPath, createReportPayload(subject, findings, summary, config))
     );
-    core.setOutput("report-json-path", reportJsonPath);
   }
 
   if (failOnFindings && shouldFail(findings)) {
@@ -152,6 +164,28 @@ function dedupeFindings(findings: ReturnType<typeof analyzeSubject>): ReturnType
   }
 
   return output;
+}
+
+function setSkippedOutputs(skipReason: string, reportJsonPath?: string): void {
+  core.setOutput("skipped", "true");
+  core.setOutput("skip-reason", skipReason);
+  core.setOutput("outcome", "skipped");
+  core.setOutput("score", "");
+  core.setOutput("findings-count", "0");
+  core.setOutput("labels", "");
+  core.setOutput("routing-hints", "[]");
+  core.setOutput("report-json-path", reportJsonPath ?? "");
+}
+
+function setCompletedOutputs(summary: ReviewSummary, findings: Finding[], reportJsonPath?: string): void {
+  core.setOutput("skipped", "false");
+  core.setOutput("skip-reason", "");
+  core.setOutput("outcome", summary.outcome);
+  core.setOutput("score", String(summary.score));
+  core.setOutput("findings-count", String(findings.length));
+  core.setOutput("labels", summary.labels.join(","));
+  core.setOutput("routing-hints", JSON.stringify(summary.routingHints));
+  core.setOutput("report-json-path", reportJsonPath ?? "");
 }
 
 function parseBoolean(value: string): boolean {

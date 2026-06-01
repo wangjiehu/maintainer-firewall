@@ -50,9 +50,13 @@ export async function analyzeWithAi(
   }
 
   const redactedSubject = redactSubject(subject, config.security.secretPatterns);
+  const redactedGuidanceDocs = guidanceDocs.map((doc) => ({
+    ...doc,
+    content: redactByPatterns(doc.content, config.security.secretPatterns)
+  }));
   const payload = JSON.stringify({
     subject: summarizeSubject(redactedSubject),
-    repositoryGuidance: summarizeGuidanceForPrompt(guidanceDocs)
+    repositoryGuidance: summarizeGuidanceForPrompt(redactedGuidanceDocs)
   }, null, 2);
   const input = truncate(payload, config.ai.maxInputCharacters);
 

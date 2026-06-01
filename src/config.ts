@@ -76,9 +76,16 @@ export const defaultConfig: FirewallConfig = {
       "\\bsecret leak\\b"
     ],
     secretPatterns: [
+      "\\bgithub_pat_[A-Za-z0-9_]{20,}\\b",
       "\\bgh[pousr]_[A-Za-z0-9_]{36,}\\b",
       "\\bsk-[A-Za-z0-9_-]{20,}\\b",
+      "\\bglpat-[A-Za-z0-9_-]{20,}\\b",
+      "\\bnpm_[A-Za-z0-9]{20,}\\b",
+      "\\bAIza[0-9A-Za-z\\-_]{35}\\b",
       "\\bAKIA[0-9A-Z]{16}\\b",
+      "\\bxox[baprs]-[A-Za-z0-9-]{20,}\\b",
+      "\\bSG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}\\b",
+      "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b",
       "\\b-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----\\b"
     ]
   },
@@ -104,9 +111,17 @@ export const defaultConfig: FirewallConfig = {
     includePassingChecks: true
   },
   ignore: {
-    authors: [],
-    labels: [],
-    titlePatterns: []
+    authors: [
+      "dependabot[bot]",
+      "renovate[bot]",
+      "github-actions[bot]"
+    ],
+    labels: [
+      "skip-firewall"
+    ],
+    titlePatterns: [
+      "^\\[skip firewall\\]"
+    ]
   },
   ai: {
     enabled: false,

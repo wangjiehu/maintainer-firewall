@@ -45089,9 +45089,13 @@ async function analyzeWithAi(subject, config, apiKey, guidanceDocs = []) {
         return [];
     }
     const redactedSubject = redactSubject(subject, config.security.secretPatterns);
+    const redactedGuidanceDocs = guidanceDocs.map((doc) => ({
+        ...doc,
+        content: redactByPatterns(doc.content, config.security.secretPatterns)
+    }));
     const payload = JSON.stringify({
         subject: summarizeSubject(redactedSubject),
-        repositoryGuidance: summarizeGuidanceForPrompt(guidanceDocs)
+        repositoryGuidance: summarizeGuidanceForPrompt(redactedGuidanceDocs)
     }, null, 2);
     const input = truncate(payload, config.ai.maxInputCharacters);
     try {
@@ -47991,7 +47995,9 @@ function composeReport(subject, findings, config, summary) {
         `## ${title}`,
         "",
         `**Outcome:** ${outcomeLabel(summary.outcome)}`,
-        `**Quality score:** ${summary.score}/100`,
+        `**Review readiness:** ${summary.score}/100`,
+        "",
+        `Subject: [${subject.kind === "issue" ? "Issue" : "Pull request"} #${subject.number}](${subject.htmlUrl})`,
         "",
         summary.headline,
         ""
@@ -48001,7 +48007,7 @@ function composeReport(subject, findings, config, summary) {
         appendPassedChecks(lines, config, summary);
         appendRoutingHints(lines, summary);
         lines.push("");
-        lines.push("_Maintainer Firewall checks for review readiness. It does not decide whether text was AI-generated._");
+        lines.push("_Review readiness is an advisory triage score, not a judgment of contributor quality. Maintainer Firewall does not decide whether text was AI-generated._");
         return lines.join("\n");
     }
     lines.push("### Next steps");
@@ -48031,7 +48037,7 @@ function composeReport(subject, findings, config, summary) {
         lines.push(summary.labels.map((label) => `- \`${label}\``).join("\n"));
     }
     lines.push("");
-    lines.push("_Maintainer Firewall checks for review readiness. It does not decide whether text was AI-generated._");
+    lines.push("_Review readiness is an advisory triage score, not a judgment of contributor quality. Maintainer Firewall does not decide whether text was AI-generated._");
     return lines.join("\n");
 }
 function shouldFail(findings) {
@@ -48045,6 +48051,12 @@ function shouldPostComment(config, findings) {
         return true;
     }
     return findings.length > 0;
+}
+function shouldRefreshExistingCleanReport(config, findings) {
+    return config.comment.enabled &&
+        config.comment.updateExisting &&
+        config.comment.postWhen === "findings" &&
+        findings.length === 0;
 }
 function escapeTable(value) {
     return value.replace(/\|/g, "\\|").replace(/\n/g, "<br>");
@@ -48146,9 +48158,16 @@ const defaultConfig = {
             "\\bsecret leak\\b"
         ],
         secretPatterns: [
+            "\\bgithub_pat_[A-Za-z0-9_]{20,}\\b",
             "\\bgh[pousr]_[A-Za-z0-9_]{36,}\\b",
             "\\bsk-[A-Za-z0-9_-]{20,}\\b",
+            "\\bglpat-[A-Za-z0-9_-]{20,}\\b",
+            "\\bnpm_[A-Za-z0-9]{20,}\\b",
+            "\\bAIza[0-9A-Za-z\\-_]{35}\\b",
             "\\bAKIA[0-9A-Z]{16}\\b",
+            "\\bxox[baprs]-[A-Za-z0-9-]{20,}\\b",
+            "\\bSG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}\\b",
+            "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b",
             "\\b-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----\\b"
         ]
     },
@@ -48174,9 +48193,17 @@ const defaultConfig = {
         includePassingChecks: true
     },
     ignore: {
-        authors: [],
-        labels: [],
-        titlePatterns: []
+        authors: [
+            "dependabot[bot]",
+            "renovate[bot]",
+            "github-actions[bot]"
+        ],
+        labels: [
+            "skip-firewall"
+        ],
+        titlePatterns: [
+            "^\\[skip firewall\\]"
+        ]
     },
     ai: {
         enabled: false,
@@ -48408,6 +48435,7 @@ function sanitizeSubject(subject, config) {
 
 ;// CONCATENATED MODULE: ./src/rules.ts
 
+
 const REPRODUCTION_PATTERN = /\b(repro|reproduction|steps?|minimal|example|sandbox|codesandbox|stackblitz|repo|repository|command|actual|expected)\b/i;
 const ENVIRONMENT_PATTERN = /\b(version|node|npm|pnpm|yarn|bun|browser|chrome|firefox|safari|edge|os|platform|environment|python|rust|cargo|go version|java)\b/i;
 const LINKED_ISSUE_PATTERN = /\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\s*:?\s*(#\d+|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/\d+)|(^|\s)#\d+\b/i;
@@ -48461,7 +48489,7 @@ function analyzeIssue(issue, config) {
                 id: "issue.duplicate.possible",
                 severity: "notice",
                 title: "Possible duplicate issue",
-                details: `A similar issue exists: #${topCandidate.number} "${topCandidate.title}" (${Math.round(topCandidate.similarity * 100)}% title overlap).`,
+                details: `A similar issue exists: #${topCandidate.number} "${redactByPatterns(topCandidate.title, config.security.secretPatterns)}" (${Math.round(topCandidate.similarity * 100)}% title overlap).`,
                 suggestion: `Compare with ${topCandidate.url} before starting a new investigation.`,
                 label: "possibleDuplicate",
                 source: "rule"
@@ -48634,6 +48662,7 @@ function matchesAnyRegex(value, patterns) {
 ;// CONCATENATED MODULE: ./src/github-client.ts
 
 
+const REPORT_MARKER = "<!-- maintainer-firewall:report -->";
 async function buildSubject(octokit, context, duplicateSearchLimit) {
     const payload = context.payload;
     const { owner, repo } = context.repo;
@@ -48736,13 +48765,7 @@ async function upsertComment(octokit, owner, repo, issueNumber, body, updateExis
         });
         return;
     }
-    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-        owner,
-        repo,
-        issue_number: issueNumber,
-        per_page: 100
-    });
-    const previous = comments.find((comment) => comment.body?.includes("<!-- maintainer-firewall:report -->"));
+    const previous = await findReportComment(octokit, owner, repo, issueNumber);
     if (previous) {
         await octokit.rest.issues.updateComment({
             owner,
@@ -48758,6 +48781,18 @@ async function upsertComment(octokit, owner, repo, issueNumber, body, updateExis
         issue_number: issueNumber,
         body
     });
+}
+async function hasReportComment(octokit, owner, repo, issueNumber) {
+    return Boolean(await findReportComment(octokit, owner, repo, issueNumber));
+}
+async function findReportComment(octokit, owner, repo, issueNumber) {
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+        owner,
+        repo,
+        issue_number: issueNumber,
+        per_page: 100
+    });
+    return comments.find((comment) => comment.body?.includes(REPORT_MARKER));
 }
 async function findDuplicateIssues(octokit, owner, repo, currentNumber, title, limit) {
     if (limit <= 0) {
@@ -48885,13 +48920,23 @@ async function run() {
     }
     const subject = await buildSubject(octokit, github_context, config.issue.duplicateSearchLimit);
     if (!subject) {
-        info(`Maintainer Firewall does not handle event ${github_context.eventName}.`);
+        const skipReason = `event ${github_context.eventName} is not handled`;
+        setSkippedOutputs(skipReason, reportJsonPath);
+        const skippedReport = `## Maintainer Firewall report\n\nSkipped: ${skipReason}.`;
+        info(skippedReport);
+        if (writeStepSummary) {
+            await tryWrite("write step summary", async () => {
+                await summary_summary.addRaw(skippedReport, true).write();
+            });
+        }
+        if (reportJsonPath) {
+            await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(null, [], null, config, skipReason)));
+        }
         return;
     }
     const skipReason = getSkipReason(subject, config);
     if (skipReason) {
-        setOutput("skipped", "true");
-        setOutput("skip-reason", skipReason);
+        setSkippedOutputs(skipReason, reportJsonPath);
         const skippedReport = `## Maintainer Firewall report\n\nSkipped ${subject.kind} #${subject.number}: ${skipReason}.`;
         info(skippedReport);
         if (writeStepSummary) {
@@ -48901,7 +48946,6 @@ async function run() {
         }
         if (reportJsonPath) {
             await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(subject, [], null, config, skipReason)));
-            setOutput("report-json-path", reportJsonPath);
         }
         return;
     }
@@ -48925,12 +48969,7 @@ async function run() {
         : [];
     const summary = createReviewSummary(subject, findings, config, routingHints);
     const report = composeReport(subject, findings, config, summary);
-    setOutput("skipped", "false");
-    setOutput("outcome", summary.outcome);
-    setOutput("score", String(summary.score));
-    setOutput("findings-count", String(findings.length));
-    setOutput("labels", summary.labels.join(","));
-    setOutput("routing-hints", JSON.stringify(summary.routingHints));
+    setCompletedOutputs(summary, findings, reportJsonPath);
     info(report);
     if (writeStepSummary) {
         await tryWrite("write step summary", async () => {
@@ -48947,7 +48986,9 @@ async function run() {
                 await tryWrite("remove stale labels", () => removeLabels(octokit, owner, repo, subject.number, staleLabels));
             }
         }
-        if (shouldPostComment(config, findings)) {
+        const shouldUpdateExistingCleanReport = shouldRefreshExistingCleanReport(config, findings) &&
+            await hasReportComment(octokit, owner, repo, subject.number);
+        if (shouldPostComment(config, findings) || shouldUpdateExistingCleanReport) {
             await tryWrite("upsert comment", () => upsertComment(octokit, owner, repo, subject.number, report, config.comment.updateExisting));
         }
     }
@@ -48956,7 +48997,6 @@ async function run() {
     }
     if (reportJsonPath) {
         await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(subject, findings, summary, config)));
-        setOutput("report-json-path", reportJsonPath);
     }
     if (failOnFindings && shouldFail(findings)) {
         setFailed("Maintainer Firewall produced warning or error findings.");
@@ -48974,6 +49014,26 @@ function dedupeFindings(findings) {
         output.push(finding);
     }
     return output;
+}
+function setSkippedOutputs(skipReason, reportJsonPath) {
+    setOutput("skipped", "true");
+    setOutput("skip-reason", skipReason);
+    setOutput("outcome", "skipped");
+    setOutput("score", "");
+    setOutput("findings-count", "0");
+    setOutput("labels", "");
+    setOutput("routing-hints", "[]");
+    setOutput("report-json-path", reportJsonPath ?? "");
+}
+function setCompletedOutputs(summary, findings, reportJsonPath) {
+    setOutput("skipped", "false");
+    setOutput("skip-reason", "");
+    setOutput("outcome", summary.outcome);
+    setOutput("score", String(summary.score));
+    setOutput("findings-count", String(findings.length));
+    setOutput("labels", summary.labels.join(","));
+    setOutput("routing-hints", JSON.stringify(summary.routingHints));
+    setOutput("report-json-path", reportJsonPath ?? "");
 }
 function parseBoolean(value) {
     return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());

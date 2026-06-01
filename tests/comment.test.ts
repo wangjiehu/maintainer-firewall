@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeReport, shouldPostComment } from "../src/comment.js";
+import { composeReport, shouldPostComment, shouldRefreshExistingCleanReport } from "../src/comment.js";
 import { defaultConfig } from "../src/config.js";
 import { createReviewSummary } from "../src/review.js";
 import type { Finding, IssueSubject } from "../src/types.js";
@@ -33,7 +33,8 @@ describe("composeReport", () => {
     const report = composeReport(subject, findings, defaultConfig, summary);
 
     expect(report).toContain("**Outcome:** Needs contributor info");
-    expect(report).toContain("**Quality score:** 82/100");
+    expect(report).toContain("**Review readiness:** 82/100");
+    expect(report).toContain("[Issue #9](https://github.com/example/repo/issues/9)");
     expect(report).toContain("### Next steps");
     expect(report).not.toContain("- [ ]");
     expect(report).toContain("<details>");
@@ -98,5 +99,31 @@ describe("shouldPostComment", () => {
         source: "rule"
       }
     ])).toBe(false);
+  });
+});
+
+describe("shouldRefreshExistingCleanReport", () => {
+  it("refreshes only clean reports in findings mode", () => {
+    expect(shouldRefreshExistingCleanReport(defaultConfig, [])).toBe(true);
+    expect(shouldRefreshExistingCleanReport(defaultConfig, [
+      {
+        id: "issue.body.too_short",
+        severity: "warning",
+        title: "Issue body is short",
+        details: "Missing context.",
+        label: "needsInfo",
+        source: "rule"
+      }
+    ])).toBe(false);
+  });
+
+  it("does not refresh comments in never mode", () => {
+    expect(shouldRefreshExistingCleanReport({
+      ...defaultConfig,
+      comment: {
+        ...defaultConfig.comment,
+        postWhen: "never"
+      }
+    }, [])).toBe(false);
   });
 });

@@ -2,6 +2,18 @@
 
 All notable changes to Maintainer Firewall will be documented in this file.
 
+## 0.1.1 - Experience Polish
+
+- Updates existing clean reports so stale bot comments do not keep telling contributors to fix already-resolved findings.
+- Renames the visible score from "Quality score" to "Review readiness" and links the checked subject in the report.
+- Adds repository dogfooding workflow for Maintainer Firewall itself.
+- Clarifies that review readiness is advisory and not a judgment of contributor quality.
+- Improves CODEOWNERS routing, JSON reports, AI safety controls, stale label cleanup, and configuration diagnostics.
+- Groups Dependabot updates to reduce repository maintenance noise.
+- Skips common automation authors by default and documents workflow concurrency to avoid duplicate report updates during rapid edits.
+- Stabilizes skipped-event outputs and broadens default secret redaction for common token formats.
+- Updates recommended workflows so skip labels and stale label cleanup react to label changes.
+
 ## 0.1.0 - Initial Release
 
 - GitHub Action for issue and pull request review-readiness triage.

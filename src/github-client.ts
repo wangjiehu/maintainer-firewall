@@ -11,6 +11,7 @@ import { jaccardSimilarity, tokenize } from "./text.js";
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 type GitHubContext = typeof github.context;
+const REPORT_MARKER = "<!-- maintainer-firewall:report -->";
 
 export async function buildSubject(
   octokit: Octokit,
@@ -161,13 +162,7 @@ export async function upsertComment(
     return;
   }
 
-  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-    owner,
-    repo,
-    issue_number: issueNumber,
-    per_page: 100
-  });
-  const previous = comments.find((comment) => comment.body?.includes("<!-- maintainer-firewall:report -->"));
+  const previous = await findReportComment(octokit, owner, repo, issueNumber);
 
   if (previous) {
     await octokit.rest.issues.updateComment({
@@ -185,6 +180,31 @@ export async function upsertComment(
     issue_number: issueNumber,
     body
   });
+}
+
+export async function hasReportComment(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<boolean> {
+  return Boolean(await findReportComment(octokit, owner, repo, issueNumber));
+}
+
+async function findReportComment(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<{ id: number; body?: string | null } | undefined> {
+  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+    owner,
+    repo,
+    issue_number: issueNumber,
+    per_page: 100
+  });
+
+  return comments.find((comment) => comment.body?.includes(REPORT_MARKER));
 }
 
 async function findDuplicateIssues(

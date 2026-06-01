@@ -17,7 +17,9 @@ export function composeReport(
     `## ${title}`,
     "",
     `**Outcome:** ${outcomeLabel(summary.outcome)}`,
-    `**Quality score:** ${summary.score}/100`,
+    `**Review readiness:** ${summary.score}/100`,
+    "",
+    `Subject: [${subject.kind === "issue" ? "Issue" : "Pull request"} #${subject.number}](${subject.htmlUrl})`,
     "",
     summary.headline,
     ""
@@ -28,7 +30,7 @@ export function composeReport(
     appendPassedChecks(lines, config, summary);
     appendRoutingHints(lines, summary);
     lines.push("");
-    lines.push("_Maintainer Firewall checks for review readiness. It does not decide whether text was AI-generated._");
+    lines.push("_Review readiness is an advisory triage score, not a judgment of contributor quality. Maintainer Firewall does not decide whether text was AI-generated._");
     return lines.join("\n");
   }
 
@@ -69,7 +71,7 @@ export function composeReport(
   }
 
   lines.push("");
-  lines.push("_Maintainer Firewall checks for review readiness. It does not decide whether text was AI-generated._");
+  lines.push("_Review readiness is an advisory triage score, not a judgment of contributor quality. Maintainer Firewall does not decide whether text was AI-generated._");
 
   return lines.join("\n");
 }
@@ -88,6 +90,13 @@ export function shouldPostComment(config: FirewallConfig, findings: Finding[]): 
   }
 
   return findings.length > 0;
+}
+
+export function shouldRefreshExistingCleanReport(config: FirewallConfig, findings: Finding[]): boolean {
+  return config.comment.enabled &&
+    config.comment.updateExisting &&
+    config.comment.postWhen === "findings" &&
+    findings.length === 0;
 }
 
 function escapeTable(value: string): string {

@@ -124,6 +124,50 @@ describe("analyzeSubject", () => {
     expect(finding?.details).not.toContain("sk-123");
   });
 
+  it("recognizes additional common token formats without echoing values", () => {
+    const issue: IssueSubject = {
+      kind: "issue",
+      number: 22,
+      title: "GitLab token exposed",
+      body: "The logs include glpat-1234567890abcdefghijkl and should be redacted.",
+      author: "reporter",
+      labels: [],
+      htmlUrl: "https://github.com/example/repo/issues/22",
+      duplicateCandidates: []
+    };
+
+    const finding = analyzeSubject(issue, defaultConfig).find((item) => item.id === "content.secret.possible");
+
+    expect(finding?.severity).toBe("error");
+    expect(JSON.stringify(finding)).not.toContain("glpat-123");
+  });
+
+  it("redacts secret-like duplicate issue titles in findings", () => {
+    const token = "github_pat_1234567890abcdefghijklmnopqrst";
+    const issue: IssueSubject = {
+      kind: "issue",
+      number: 23,
+      title: "Auth logs expose credentials",
+      body: "Version 1.2.3 shows this after running the documented reproduction command with expected versus actual behavior.",
+      author: "reporter",
+      labels: [],
+      htmlUrl: "https://github.com/example/repo/issues/23",
+      duplicateCandidates: [
+        {
+          number: 7,
+          title: `Leaked ${token}`,
+          url: "https://github.com/example/repo/issues/7",
+          similarity: 0.72
+        }
+      ]
+    };
+
+    const finding = analyzeSubject(issue, defaultConfig).find((item) => item.id === "issue.duplicate.possible");
+
+    expect(finding?.details).toContain("[redacted]");
+    expect(finding?.details).not.toContain(token);
+  });
+
   it("flags missing configured required sections", () => {
     const pr: PullRequestSubject = {
       kind: "pull_request",
