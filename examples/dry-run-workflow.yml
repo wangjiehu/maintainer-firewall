@@ -1,0 +1,21 @@
+name: Maintainer Firewall Dry Run
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  firewall:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: wangjiehu/maintainer-firewall@v0.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: true

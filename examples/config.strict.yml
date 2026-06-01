@@ -1,0 +1,26 @@
+version: 1
+
+issue:
+  minBodyCharacters: 200
+  requireReproduction: true
+  requireEnvironment: true
+  requiredSections:
+    - Reproduction
+    - Environment
+
+pullRequest:
+  minBodyCharacters: 200
+  requireLinkedIssue: true
+  requireTestsForCodeChanges: true
+  largeChangeThreshold: 400
+  requiredSections:
+    - Summary
+    - Test plan
+
+comment:
+  postWhen: findings
+  includePassingChecks: true
+
+labeling:
+  enabled: true
+  removeStale: true

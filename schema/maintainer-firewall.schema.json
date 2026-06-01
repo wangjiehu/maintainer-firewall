@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/wangjiehu/maintainer-firewall/main/schema/maintainer-firewall.schema.json",
+  "title": "Maintainer Firewall Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minBodyCharacters": { "type": "integer", "minimum": 0 },
+        "requireReproduction": { "type": "boolean" },
+        "requireEnvironment": { "type": "boolean" },
+        "duplicateSearchLimit": { "type": "integer", "minimum": 0 },
+        "requiredSections": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minBodyCharacters": { "type": "integer", "minimum": 0 },
+        "requireLinkedIssue": { "type": "boolean" },
+        "requireTestsForCodeChanges": { "type": "boolean" },
+        "largeChangeThreshold": { "type": "integer", "minimum": 1 },
+        "sensitivePaths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "testPathPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "requiredSections": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "guidancePaths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "codeOwnersPaths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "maxGuidanceCharacters": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "reportPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "secretPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "needsInfo": { "type": "string" },
+        "needsTests": { "type": "string" },
+        "largeScope": { "type": "string" },
+        "possibleDuplicate": { "type": "string" },
+        "securityReview": { "type": "string" },
+        "maintainerReview": { "type": "string" }
+      }
+    },
+    "labeling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "createMissing": { "type": "boolean" },
+        "removeStale": { "type": "boolean" }
+      }
+    },
+    "comment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "updateExisting": { "type": "boolean" },
+        "header": { "type": "string" },
+        "postWhen": {
+          "type": "string",
+          "enum": ["always", "findings", "never"]
+        },
+        "maxFindings": { "type": "integer", "minimum": 1 },
+        "includePassingChecks": { "type": "boolean" }
+      }
+    },
+    "ignore": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "authors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "titlePatterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "ai": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "model": { "type": "string" },
+        "maxInputCharacters": { "type": "integer", "minimum": 1000 },
+        "maxOutputTokens": { "type": "integer", "minimum": 100 },
+        "timeoutMs": { "type": "integer", "minimum": 1000 }
+      }
+    }
+  }
+}

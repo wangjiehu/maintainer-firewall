@@ -1,0 +1,254 @@
+# Maintainer Firewall
+
+Maintainer Firewall is a GitHub Action for open-source maintainers who need a calmer triage queue. It reviews new issues and pull requests for evidence, reproducibility, scope, tests, and project-specific contribution rules.
+
+It does not try to prove whether a contribution was AI-generated. Instead, it asks the question maintainers actually care about: is this contribution actionable and maintainable?
+
+## Product behavior
+
+Each run produces a compact review-readiness report:
+
+- An outcome such as `Needs contributor info`, `Needs tests`, or `Ready for maintainer review`
+- A 0-100 quality score
+- A short maintainer-facing headline
+- Contributor-friendly next steps
+- A collapsible finding table
+- Optional labels
+- Optional passing checks, so good contributions do not look like a silent no-op
+
+The default mode is intentionally low-noise: it writes a comment only when there are findings. Workflow outputs are always set, so teams can build custom checks or dashboards without adding comments to clean issues and PRs.
+
+## What it checks
+
+- Issue body completeness
+- Reproduction steps or minimal examples
+- Environment and version details
+- Possible duplicate issues
+- PR description quality
+- Linked issues
+- Test coverage for code changes
+- Large or broad PR scope
+- Sensitive path changes
+- Security-sensitive language and possible leaked credentials
+- CODEOWNERS routing hints for pull requests
+- Optional AI-assisted semantic findings
+
+CODEOWNERS support is best-effort and intended for routing hints, not as a replacement for GitHub's protected review enforcement.
+
+## Quick start
+
+Create `.github/workflows/maintainer-firewall.yml`:
+
+```yaml
+name: Maintainer Firewall
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  firewall:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: wangjiehu/maintainer-firewall@v0.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Add `.maintainer-firewall.yml` to customize thresholds, labels, and optional AI analysis.
+
+Use `pull_request_target` when you want the action to comment on pull requests from forks. Maintainer Firewall does not check out pull request code, and it loads configuration from the base ref. If you add checkout or custom scripts to the same job, do not run untrusted pull request code with write permissions.
+
+The action also writes the report to the GitHub Actions step summary by default. Set `write-step-summary: false` to disable that.
+
+Set `report-json-path` when another workflow step should consume a structured report:
+
+```yaml
+      - uses: wangjiehu/maintainer-firewall@v0.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          report-json-path: maintainer-firewall-report.json
+```
+
+### Permissions and Events
+
+Use the smallest permissions that match the rollout mode:
+
+| Mode | Event | Permissions |
+| --- | --- | --- |
+| Dry run | `pull_request` | `contents: read`, `issues: read`, `pull-requests: read` |
+| Comment and label PRs from forks | `pull_request_target` | `contents: read`, `issues: write`, `pull-requests: write` |
+| Internal-only PRs | `pull_request` | `contents: read`, `issues: write`, `pull-requests: write` |
+
+Do not combine `pull_request_target`, write permissions, and a checkout of untrusted pull request code in the same job.
+
+## Optional OpenAI analysis
+
+Maintainer Firewall works without an OpenAI API key. To enable AI-assisted semantic checks, set `ai.enabled: true` in `.maintainer-firewall.yml` and pass an API key:
+
+```yaml
+      - uses: wangjiehu/maintainer-firewall@v0.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+```
+
+AI analysis is advisory. Deterministic checks run first, and the action only posts labels/comments unless you opt into failing the workflow.
+
+When AI analysis is enabled, Maintainer Firewall also loads configured repository guidance files such as `CONTRIBUTING.md`, PR templates, and issue templates. This lets semantic findings reflect the project's own rules instead of generic checklist advice.
+
+## Safer rollout
+
+Start in dry-run mode if you want to inspect reports without writing comments or labels:
+
+```yaml
+      - uses: wangjiehu/maintainer-firewall@v0.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          dry-run: true
+```
+
+For early adoption, keep `comment.enabled: true` and `labeling.enabled: false` so contributors see useful next steps without changing your existing label workflow.
+
+If you need comments on every run, set `comment.postWhen: always`. For output-only operation, set `comment.postWhen: never`.
+
+## Outputs
+
+Maintainer Firewall sets outputs on every handled issue or pull request:
+
+| Output | Description |
+| --- | --- |
+| `outcome` | Review-readiness outcome such as `ready`, `needs_info`, `needs_tests`, `needs_maintainer_review`, or `blocked`. |
+| `score` | Review-readiness score from 0 to 100. |
+| `findings-count` | Number of findings from enabled checks. |
+| `labels` | Comma-separated suggested labels. |
+| `routing-hints` | JSON array of CODEOWNERS-derived routing hints. |
+| `skipped` | `true` when ignore rules skipped the subject. |
+| `skip-reason` | Explanation when `skipped` is true. |
+| `report-json-path` | Path to the structured JSON report when configured. |
+
+## Configuration
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/wangjiehu/maintainer-firewall/main/schema/maintainer-firewall.schema.json
+version: 1
+
+issue:
+  enabled: true
+  minBodyCharacters: 120
+  requireReproduction: true
+  requireEnvironment: true
+  duplicateSearchLimit: 8
+  requiredSections: []
+
+pullRequest:
+  enabled: true
+  minBodyCharacters: 120
+  requireLinkedIssue: true
+  requireTestsForCodeChanges: true
+  largeChangeThreshold: 800
+  sensitivePaths:
+    - ".github/workflows/**"
+    - "package-lock.json"
+  testPathPatterns:
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "tests/**"
+  requiredSections:
+    - "Test plan"
+
+repository:
+  guidancePaths:
+    - "CONTRIBUTING.md"
+    - ".github/CONTRIBUTING.md"
+    - ".github/ISSUE_TEMPLATE"
+    - ".github/pull_request_template.md"
+  codeOwnersPaths:
+    - "CODEOWNERS"
+    - ".github/CODEOWNERS"
+    - "docs/CODEOWNERS"
+  maxGuidanceCharacters: 16000
+
+security:
+  enabled: true
+  reportPatterns:
+    - "\\bCVE-\\d{4}-\\d+\\b"
+    - "\\bvulnerab(?:ility|le)\\b"
+    - "\\bexploit\\b"
+    - "\\bXSS\\b"
+    - "\\btoken leak\\b"
+  secretPatterns:
+    - "\\bgh[pousr]_[A-Za-z0-9_]{36,}\\b"
+    - "\\bsk-[A-Za-z0-9_-]{20,}\\b"
+    - "\\bAKIA[0-9A-Z]{16}\\b"
+
+labels:
+  needsInfo: needs-info
+  needsTests: needs-tests
+  largeScope: large-scope
+  possibleDuplicate: possible-duplicate
+  securityReview: security-review
+  maintainerReview: maintainer-review
+
+labeling:
+  enabled: true
+  createMissing: true
+  removeStale: true
+
+comment:
+  enabled: true
+  updateExisting: true
+  header: Maintainer Firewall report
+  postWhen: findings
+  maxFindings: 8
+  includePassingChecks: true
+
+ignore:
+  authors:
+    - dependabot[bot]
+  labels:
+    - skip-firewall
+  titlePatterns:
+    - "^\\[skip firewall\\]"
+
+ai:
+  enabled: false
+  model: gpt-5-mini
+  maxInputCharacters: 12000
+  maxOutputTokens: 1200
+  timeoutMs: 15000
+```
+
+See [`examples/config.quiet.yml`](examples/config.quiet.yml) for a gentle rollout preset and [`examples/config.strict.yml`](examples/config.strict.yml) for stricter projects.
+
+## Local development
+
+```bash
+npm install
+npm run check
+npm run demo
+npm run bundle
+npm run verify:dist
+```
+
+The bundled action entry point is `dist/index.js`.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internal flow and safety model.
+
+## Release
+
+```bash
+npm run check
+npm run verify:dist
+git tag v0.1.0
+git push origin main v0.1.0
+```
+
+The release workflow publishes GitHub release notes for `v*` tags.

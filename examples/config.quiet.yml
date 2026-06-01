@@ -1,0 +1,17 @@
+version: 1
+
+labeling:
+  enabled: false
+
+comment:
+  enabled: true
+  postWhen: findings
+  includePassingChecks: false
+
+pullRequest:
+  requireLinkedIssue: false
+  requireTestsForCodeChanges: true
+  largeChangeThreshold: 1200
+
+ai:
+  enabled: false

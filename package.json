@@ -1,0 +1,47 @@
+{
+  "name": "maintainer-firewall",
+  "version": "0.1.0",
+  "description": "A maintainer-first GitHub Action that filters noisy issues and pull requests by evidence, reproducibility, scope, and project-specific rules.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "bundle": "ncc build src/index.ts -o dist --source-map --license licenses.txt",
+    "demo": "npm run build && node scripts/demo.mjs",
+    "verify:dist": "npm run bundle && git diff --exit-code -- dist",
+    "test": "vitest run",
+    "check": "npm run build && npm run test"
+  },
+  "keywords": [
+    "github-action",
+    "open-source",
+    "maintainers",
+    "issue-triage",
+    "pull-request-review"
+  ],
+  "author": "wangjiehu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wangjiehu/maintainer-firewall.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wangjiehu/maintainer-firewall/issues"
+  },
+  "homepage": "https://github.com/wangjiehu/maintainer-firewall#readme",
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
+    "minimatch": "^10.0.1",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@vercel/ncc": "^0.38.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

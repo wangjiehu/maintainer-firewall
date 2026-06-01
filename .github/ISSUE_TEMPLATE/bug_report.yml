@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible problem in Maintainer Firewall.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a problem.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the workflow event, relevant config, and a minimal issue or PR body that triggers the problem.
+      placeholder: |
+        1. Configure ...
+        2. Open an issue with ...
+        3. Maintainer Firewall reports ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should the action have done?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Redact secrets before pasting logs.
+      render: text

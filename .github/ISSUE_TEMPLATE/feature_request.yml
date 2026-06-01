@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest a maintainer workflow improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Maintainer problem
+      description: What recurring review or triage pain would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful version of the feature.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Product surface
+      options:
+        - Deterministic rule
+        - AI-assisted analysis
+        - Comment/report output
+        - GitHub labels
+        - Configuration
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Noise and safety tradeoffs
+      description: How could this create false positives, contributor friction, or security risk?

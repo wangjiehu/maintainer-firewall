@@ -1,0 +1,36 @@
+# Architecture
+
+Maintainer Firewall is built as a GitHub JavaScript Action with a small deterministic core and an optional AI layer.
+
+## Flow
+
+1. Load configuration from the base ref.
+2. Build an issue or pull request subject from the GitHub event.
+3. Apply ignore rules.
+4. Run deterministic rules.
+5. Skip AI analysis if a possible secret is detected.
+6. Load repository guidance and CODEOWNERS hints when needed.
+7. Run optional AI analysis with timeout, input truncation, output limits, and redaction.
+8. Create a review summary with outcome, score, next steps, labels, and routing hints.
+9. Write outputs, step summary, optional JSON report, labels, and comment.
+
+## Design Principles
+
+- Deterministic checks run first and work without network calls beyond GitHub.
+- AI analysis is advisory, optional, and disabled by default.
+- Issue and pull request text are treated as untrusted input.
+- Possible credentials are not repeated in findings or structured reports.
+- The action does not check out pull request code.
+- Label and comment writes are best-effort so triage does not fail because of permission differences.
+
+## Main Modules
+
+- `src/index.ts`: action entry point and orchestration.
+- `src/rules.ts`: deterministic issue and pull request findings.
+- `src/review.ts`: outcome, score, passed checks, next steps, and routing model.
+- `src/comment.ts`: Markdown report rendering and comment policy.
+- `src/ai.ts`: optional OpenAI Responses API integration.
+- `src/guidance.ts`: repository guidance loading.
+- `src/codeowners.ts`: best-effort CODEOWNERS routing hints.
+- `src/report.ts`: structured JSON report generation.
+- `src/labels.ts`: desired and stale managed label calculation.

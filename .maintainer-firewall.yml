@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/wangjiehu/maintainer-firewall/main/schema/maintainer-firewall.schema.json
+version: 1
+
+issue:
+  enabled: true
+  minBodyCharacters: 120
+  requireReproduction: true
+  requireEnvironment: true
+  duplicateSearchLimit: 8
+  requiredSections: []
+
+pullRequest:
+  enabled: true
+  minBodyCharacters: 120
+  requireLinkedIssue: true
+  requireTestsForCodeChanges: true
+  largeChangeThreshold: 800
+  sensitivePaths:
+    - ".github/workflows/**"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "yarn.lock"
+    - "Cargo.lock"
+    - "go.sum"
+  testPathPatterns:
+    - "**/*.test.*"
+    - "**/*.spec.*"
+    - "**/__tests__/**"
+    - "tests/**"
+  requiredSections:
+    - "Test plan"
+
+repository:
+  guidancePaths:
+    - "CONTRIBUTING.md"
+    - ".github/CONTRIBUTING.md"
+    - "docs/CONTRIBUTING.md"
+    - "PULL_REQUEST_TEMPLATE.md"
+    - ".github/pull_request_template.md"
+    - ".github/PULL_REQUEST_TEMPLATE.md"
+    - ".github/ISSUE_TEMPLATE.md"
+    - ".github/ISSUE_TEMPLATE"
+  codeOwnersPaths:
+    - "CODEOWNERS"
+    - ".github/CODEOWNERS"
+    - "docs/CODEOWNERS"
+  maxGuidanceCharacters: 16000
+
+security:
+  enabled: true
+  reportPatterns:
+    - "\\bCVE-\\d{4}-\\d+\\b"
+    - "\\bvulnerab(?:ility|le)\\b"
+    - "\\bexploit\\b"
+    - "\\bRCE\\b"
+    - "\\bXSS\\b"
+    - "\\btoken leak\\b"
+  secretPatterns:
+    - "\\bgh[pousr]_[A-Za-z0-9_]{36,}\\b"
+    - "\\bsk-[A-Za-z0-9_-]{20,}\\b"
+    - "\\bAKIA[0-9A-Z]{16}\\b"
+
+labels:
+  needsInfo: needs-info
+  needsTests: needs-tests
+  largeScope: large-scope
+  possibleDuplicate: possible-duplicate
+  securityReview: security-review
+  maintainerReview: maintainer-review
+
+labeling:
+  enabled: true
+  createMissing: true
+  removeStale: true
+
+comment:
+  enabled: true
+  updateExisting: true
+  header: Maintainer Firewall report
+  postWhen: findings
+  maxFindings: 8
+  includePassingChecks: true
+
+ignore:
+  authors:
+    - dependabot[bot]
+  labels:
+    - skip-firewall
+  titlePatterns:
+    - "^\\[skip firewall\\]"
+
+ai:
+  enabled: false
+  model: gpt-5-mini
+  maxInputCharacters: 12000
+  maxOutputTokens: 1200
+  timeoutMs: 15000

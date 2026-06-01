@@ -1,0 +1,247 @@
+import * as core from "@actions/core";
+import { parse } from "yaml";
+import type * as github from "@actions/github";
+import type { FirewallConfig } from "./types.js";
+
+type Octokit = ReturnType<typeof github.getOctokit>;
+
+export const defaultConfig: FirewallConfig = {
+  version: 1,
+  issue: {
+    enabled: true,
+    minBodyCharacters: 120,
+    requireReproduction: true,
+    requireEnvironment: true,
+    duplicateSearchLimit: 8,
+    requiredSections: []
+  },
+  pullRequest: {
+    enabled: true,
+    minBodyCharacters: 120,
+    requireLinkedIssue: true,
+    requireTestsForCodeChanges: true,
+    largeChangeThreshold: 800,
+    sensitivePaths: [
+      ".github/workflows/**",
+      "package-lock.json",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      "Cargo.lock",
+      "go.sum"
+    ],
+    testPathPatterns: [
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/__tests__/**",
+      "tests/**"
+    ],
+    requiredSections: []
+  },
+  repository: {
+    guidancePaths: [
+      "CONTRIBUTING.md",
+      ".github/CONTRIBUTING.md",
+      "docs/CONTRIBUTING.md",
+      "PULL_REQUEST_TEMPLATE.md",
+      ".github/pull_request_template.md",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/PULL_REQUEST_TEMPLATE",
+      ".github/ISSUE_TEMPLATE.md",
+      ".github/ISSUE_TEMPLATE"
+    ],
+    codeOwnersPaths: [
+      "CODEOWNERS",
+      ".github/CODEOWNERS",
+      "docs/CODEOWNERS"
+    ],
+    maxGuidanceCharacters: 16000
+  },
+  security: {
+    enabled: true,
+    reportPatterns: [
+      "\\bCVE-\\d{4}-\\d+\\b",
+      "\\bvulnerab(?:ility|le)\\b",
+      "\\bexploit\\b",
+      "\\bRCE\\b",
+      "\\bremote code execution\\b",
+      "\\bXSS\\b",
+      "\\bCSRF\\b",
+      "\\bSSRF\\b",
+      "\\bSQL injection\\b",
+      "\\bpath traversal\\b",
+      "\\bprototype pollution\\b",
+      "\\bauth bypass\\b",
+      "\\bcredential leak\\b",
+      "\\btoken leak\\b",
+      "\\bsecret leak\\b"
+    ],
+    secretPatterns: [
+      "\\bgh[pousr]_[A-Za-z0-9_]{36,}\\b",
+      "\\bsk-[A-Za-z0-9_-]{20,}\\b",
+      "\\bAKIA[0-9A-Z]{16}\\b",
+      "\\b-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----\\b"
+    ]
+  },
+  labeling: {
+    enabled: true,
+    createMissing: true,
+    removeStale: true
+  },
+  labels: {
+    needsInfo: "needs-info",
+    needsTests: "needs-tests",
+    largeScope: "large-scope",
+    possibleDuplicate: "possible-duplicate",
+    securityReview: "security-review",
+    maintainerReview: "maintainer-review"
+  },
+  comment: {
+    enabled: true,
+    updateExisting: true,
+    header: "Maintainer Firewall report",
+    postWhen: "findings",
+    maxFindings: 8,
+    includePassingChecks: true
+  },
+  ignore: {
+    authors: [],
+    labels: [],
+    titlePatterns: []
+  },
+  ai: {
+    enabled: false,
+    model: "gpt-5-mini",
+    maxInputCharacters: 12000,
+    maxOutputTokens: 1200,
+    timeoutMs: 15000
+  }
+};
+
+export async function loadConfig(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string
+): Promise<FirewallConfig> {
+  try {
+    const response = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path,
+      ref
+    });
+
+    if (Array.isArray(response.data) || response.data.type !== "file") {
+      core.warning(`${path} is not a file. Falling back to defaults.`);
+      return defaultConfig;
+    }
+
+    const content = Buffer.from(response.data.content, "base64").toString("utf8");
+    const parsed = parse(content) as Partial<FirewallConfig> | undefined;
+    return normalizeConfig(deepMerge(defaultConfig, parsed ?? {}));
+  } catch (error) {
+    const status = getErrorStatus(error);
+    if (status === 404) {
+      core.info(`No ${path} found. Using default Maintainer Firewall config.`);
+      return defaultConfig;
+    }
+
+    core.warning(`Failed to load ${path}: ${getErrorMessage(error)}. Using defaults.`);
+    return defaultConfig;
+  }
+}
+
+function normalizeConfig(config: FirewallConfig): FirewallConfig {
+  return {
+    ...config,
+    issue: {
+      ...config.issue,
+      minBodyCharacters: Math.max(0, config.issue.minBodyCharacters),
+      duplicateSearchLimit: Math.max(0, config.issue.duplicateSearchLimit),
+      requiredSections: config.issue.requiredSections ?? []
+    },
+    pullRequest: {
+      ...config.pullRequest,
+      minBodyCharacters: Math.max(0, config.pullRequest.minBodyCharacters),
+      largeChangeThreshold: Math.max(1, config.pullRequest.largeChangeThreshold),
+      sensitivePaths: config.pullRequest.sensitivePaths ?? [],
+      testPathPatterns: config.pullRequest.testPathPatterns ?? [],
+      requiredSections: config.pullRequest.requiredSections ?? []
+    },
+    repository: {
+      ...config.repository,
+      guidancePaths: config.repository.guidancePaths ?? [],
+      codeOwnersPaths: config.repository.codeOwnersPaths ?? [],
+      maxGuidanceCharacters: Math.max(0, config.repository.maxGuidanceCharacters)
+    },
+    security: {
+      ...config.security,
+      reportPatterns: config.security.reportPatterns ?? [],
+      secretPatterns: config.security.secretPatterns ?? []
+    },
+    labeling: {
+      ...config.labeling,
+      enabled: config.labeling.enabled,
+      createMissing: config.labeling.createMissing,
+      removeStale: config.labeling.removeStale
+    },
+    comment: {
+      ...config.comment,
+      postWhen: isKnownPostWhen(config.comment.postWhen) ? config.comment.postWhen : "findings",
+      maxFindings: Math.max(1, config.comment.maxFindings),
+      includePassingChecks: config.comment.includePassingChecks
+    },
+    ignore: {
+      authors: config.ignore.authors ?? [],
+      labels: config.ignore.labels ?? [],
+      titlePatterns: config.ignore.titlePatterns ?? []
+    },
+    ai: {
+      ...config.ai,
+      maxInputCharacters: Math.max(1000, config.ai.maxInputCharacters),
+      maxOutputTokens: Math.max(100, config.ai.maxOutputTokens),
+      timeoutMs: Math.max(1000, config.ai.timeoutMs)
+    }
+  };
+}
+
+function deepMerge<T>(base: T, override: Partial<T>): T {
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return (override ?? base) as T;
+  }
+
+  const output: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (value === undefined) {
+      continue;
+    }
+
+    const baseValue = output[key];
+    output[key] = isPlainObject(baseValue) && isPlainObject(value)
+      ? deepMerge(baseValue, value)
+      : value;
+  }
+
+  return output as T;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (typeof error === "object" && error && "status" in error) {
+    return Number((error as { status?: unknown }).status);
+  }
+
+  return undefined;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isKnownPostWhen(value: unknown): value is FirewallConfig["comment"]["postWhen"] {
+  return value === "always" || value === "findings" || value === "never";
+}
