@@ -11,13 +11,14 @@ import {
   shouldPostSkippedComment,
   shouldRefreshExistingCleanReport
 } from "./comment.js";
-import { loadConfig } from "./config.js";
+import { loadConfigWithDiagnostics } from "./config.js";
 import { validateConfig } from "./diagnostics.js";
 import { applyFindingPolicy } from "./finding-policy.js";
 import { loadRepositoryGuidance } from "./guidance.js";
 import { getSkipReason } from "./ignore.js";
 import { staleManagedLabels } from "./labels.js";
 import { createReportPayload, writeReportJson } from "./report.js";
+import { redactByPatterns } from "./redaction.js";
 import { createReviewSummary } from "./review.js";
 import { analyzeSubject } from "./rules.js";
 import { composeSetupSummary, composeStepSummary } from "./setup-summary.js";
@@ -38,8 +39,11 @@ async function run(): Promise<void> {
   const { owner, repo } = github.context.repo;
 
   const configRef = getConfigRef(github.context);
-  const config = await loadConfig(octokit, owner, repo, configPath, configRef);
-  for (const warning of validateConfig(config)) {
+  const configLoad = await loadConfigWithDiagnostics(octokit, owner, repo, configPath, configRef);
+  const config = configLoad.config;
+  const configWarnings = [...configLoad.warnings, ...validateConfig(config)]
+    .map((warning) => redactByPatterns(warning, config.security.secretPatterns));
+  for (const warning of configWarnings) {
     core.warning(warning);
   }
 
@@ -47,11 +51,12 @@ async function run(): Promise<void> {
 
   if (!subject) {
     const skipReason = `event ${github.context.eventName} is not handled`;
-    setSkippedOutputs(skipReason, reportJsonPath);
+    setSkippedOutputs(skipReason, reportJsonPath, configWarnings);
     const skippedReport = composeSkippedReport(null, skipReason, config);
     const setupSummary = composeSetupSummary({
       config,
       configPath,
+      configWarnings,
       dryRun,
       emitAnnotations,
       failOnFindings,
@@ -68,7 +73,7 @@ async function run(): Promise<void> {
 
     if (reportJsonPath) {
       await tryWrite("write JSON report", () =>
-        writeReportJson(reportJsonPath, createReportPayload(null, [], null, config, skipReason))
+        writeReportJson(reportJsonPath, createReportPayload(null, [], null, config, skipReason, configWarnings))
       );
     }
 
@@ -77,11 +82,12 @@ async function run(): Promise<void> {
 
   const skipReason = getSkipReason(subject, config);
   if (skipReason) {
-    setSkippedOutputs(skipReason, reportJsonPath);
+    setSkippedOutputs(skipReason, reportJsonPath, configWarnings);
     const skippedReport = composeSkippedReport(subject, skipReason, config);
     const setupSummary = composeSetupSummary({
       config,
       configPath,
+      configWarnings,
       dryRun,
       emitAnnotations,
       failOnFindings,
@@ -98,7 +104,7 @@ async function run(): Promise<void> {
 
     if (reportJsonPath) {
       await tryWrite("write JSON report", () =>
-        writeReportJson(reportJsonPath, createReportPayload(subject, [], null, config, skipReason))
+        writeReportJson(reportJsonPath, createReportPayload(subject, [], null, config, skipReason, configWarnings))
       );
     }
 
@@ -151,6 +157,7 @@ async function run(): Promise<void> {
   const setupSummary = composeSetupSummary({
     config,
     configPath,
+    configWarnings,
     dryRun,
     emitAnnotations,
     failOnFindings,
@@ -159,7 +166,7 @@ async function run(): Promise<void> {
     subjectKind: subject.kind
   });
 
-  setCompletedOutputs(summary, findings, reportJsonPath);
+  setCompletedOutputs(summary, findings, reportJsonPath, configWarnings);
   if (emitAnnotations) {
     emitFindingAnnotations(findings, config);
   }
@@ -205,7 +212,7 @@ async function run(): Promise<void> {
 
   if (reportJsonPath) {
     await tryWrite("write JSON report", () =>
-      writeReportJson(reportJsonPath, createReportPayload(subject, findings, summary, config))
+      writeReportJson(reportJsonPath, createReportPayload(subject, findings, summary, config, undefined, configWarnings))
     );
   }
 
@@ -231,7 +238,7 @@ function dedupeFindings(findings: ReturnType<typeof analyzeSubject>): ReturnType
   return output;
 }
 
-function setSkippedOutputs(skipReason: string, reportJsonPath?: string): void {
+function setSkippedOutputs(skipReason: string, reportJsonPath?: string, configWarnings: string[] = []): void {
   core.setOutput("skipped", "true");
   core.setOutput("skip-reason", skipReason);
   core.setOutput("outcome", "skipped");
@@ -240,9 +247,16 @@ function setSkippedOutputs(skipReason: string, reportJsonPath?: string): void {
   core.setOutput("labels", "");
   core.setOutput("routing-hints", "[]");
   core.setOutput("report-json-path", reportJsonPath ?? "");
+  core.setOutput("config-warnings-count", String(configWarnings.length));
+  core.setOutput("config-warnings", JSON.stringify(configWarnings));
 }
 
-function setCompletedOutputs(summary: ReviewSummary, findings: Finding[], reportJsonPath?: string): void {
+function setCompletedOutputs(
+  summary: ReviewSummary,
+  findings: Finding[],
+  reportJsonPath?: string,
+  configWarnings: string[] = []
+): void {
   core.setOutput("skipped", "false");
   core.setOutput("skip-reason", "");
   core.setOutput("outcome", summary.outcome);
@@ -251,6 +265,8 @@ function setCompletedOutputs(summary: ReviewSummary, findings: Finding[], report
   core.setOutput("labels", summary.labels.join(","));
   core.setOutput("routing-hints", JSON.stringify(summary.routingHints));
   core.setOutput("report-json-path", reportJsonPath ?? "");
+  core.setOutput("config-warnings-count", String(configWarnings.length));
+  core.setOutput("config-warnings", JSON.stringify(configWarnings));
 }
 
 function parseBoolean(value: string): boolean {

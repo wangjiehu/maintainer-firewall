@@ -44,7 +44,9 @@ const expectedOutputs = [
   "routing-hints",
   "skipped",
   "skip-reason",
-  "report-json-path"
+  "report-json-path",
+  "config-warnings-count",
+  "config-warnings"
 ];
 
 describe("action metadata", () => {

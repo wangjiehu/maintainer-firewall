@@ -5,6 +5,7 @@ const PROTECTED_FINDING_IDS = new Set(["content.secret.possible"]);
 export interface SetupSummaryOptions {
   config: FirewallConfig;
   configPath: string;
+  configWarnings: string[];
   dryRun: boolean;
   emitAnnotations: boolean;
   failOnFindings: boolean;
@@ -23,17 +24,32 @@ export function composeSetupSummary(options: SetupSummaryOptions): string {
     ["Annotations", options.emitAnnotations ? "Enabled" : "Disabled"],
     ["JSON report", options.reportJsonPath || "Disabled"],
     ["Rule policy", rulePolicyState(options.config)],
+    ["Configuration warnings", options.configWarnings.length === 0 ? "None" : String(options.configWarnings.length)],
     ["AI analysis", aiState(options.config, options.openAiApiKeyProvided)],
     ["Failure policy", options.failOnFindings ? "Fail on warning or error findings" : "Advisory; workflow does not fail on findings"]
   ];
 
-  return [
+  const lines = [
     "## Maintainer Firewall setup",
     "",
     "| Setting | Active state |",
     "| --- | --- |",
     ...rows.map(([setting, state]) => `| ${escapeTable(setting)} | ${escapeTable(state)} |`)
-  ].join("\n");
+  ];
+
+  if (options.configWarnings.length > 0) {
+    lines.push("");
+    lines.push("### Configuration warnings");
+    for (const warning of options.configWarnings.slice(0, 10)) {
+      lines.push(`- ${warning}`);
+    }
+
+    if (options.configWarnings.length > 10) {
+      lines.push(`- ${options.configWarnings.length - 10} additional warning${options.configWarnings.length === 11 ? "" : "s"} hidden.`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 export function composeStepSummary(setupSummary: string, report: string): string {

@@ -48,6 +48,10 @@ outputs:
     description: Reason the subject was skipped, when applicable.
   report-json-path:
     description: Path to the structured JSON report when report-json-path is configured.
+  config-warnings-count:
+    description: Number of configuration diagnostics emitted while loading and validating Maintainer Firewall config.
+  config-warnings:
+    description: JSON array of configuration diagnostics emitted while loading and validating Maintainer Firewall config.
 runs:
   using: node20
   main: dist/index.js

@@ -48371,6 +48371,13 @@ const defaultConfig = {
     }
 };
 async function loadConfig(octokit, owner, repo, path, ref) {
+    const result = await loadConfigWithDiagnostics(octokit, owner, repo, path, ref);
+    for (const warning of result.warnings) {
+        core.warning(warning);
+    }
+    return result.config;
+}
+async function loadConfigWithDiagnostics(octokit, owner, repo, path, ref) {
     try {
         const response = await octokit.rest.repos.getContent({
             owner,
@@ -48379,24 +48386,31 @@ async function loadConfig(octokit, owner, repo, path, ref) {
             ref
         });
         if (Array.isArray(response.data) || response.data.type !== "file") {
-            core_warning(`${path} is not a file. Falling back to defaults.`);
-            return defaultConfig;
+            return {
+                config: defaultConfig,
+                warnings: [`${path} is not a file. Falling back to defaults.`]
+            };
         }
         const content = Buffer.from(response.data.content, "base64").toString("utf8");
         const parsed = (0,yaml_dist/* parse */.qg)(content);
-        for (const warning of configShapeWarnings(parsed ?? {})) {
-            core_warning(warning);
-        }
-        return mergeConfig(parsed ?? {});
+        return {
+            config: mergeConfig(parsed ?? {}),
+            warnings: configShapeWarnings(parsed ?? {})
+        };
     }
     catch (error) {
         const status = config_getErrorStatus(error);
         if (status === 404) {
             info(`No ${path} found. Using default Maintainer Firewall config.`);
-            return defaultConfig;
+            return {
+                config: defaultConfig,
+                warnings: []
+            };
         }
-        core_warning(`Failed to load ${path}: ${config_getErrorMessage(error)}. Using defaults.`);
-        return defaultConfig;
+        return {
+            config: defaultConfig,
+            warnings: [`Failed to load ${path}: ${config_getErrorMessage(error)}. Using defaults.`]
+        };
     }
 }
 function mergeConfig(override) {
@@ -48587,14 +48601,14 @@ function validateConfig(config) {
 }
 function invalidRegexWarnings(path, patterns) {
     return patterns
-        .map((pattern) => {
+        .map((pattern, index) => {
         try {
             new RegExp(pattern);
             return null;
         }
         catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            return `${path} contains an invalid regular expression "${pattern}": ${message}`;
+            return `${path}[${index}] contains an invalid regular expression: ${message}`;
         }
     })
         .filter((warning) => Boolean(warning));
@@ -48688,14 +48702,16 @@ const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(impo
 
 
 
-function createReportPayload(subject, findings, summary, config, skipReason) {
+function createReportPayload(subject, findings, summary, config, skipReason, configWarnings = []) {
+    const safeConfigWarnings = configWarnings.map((warning) => redactByPatterns(warning, config.security.secretPatterns));
     return {
         version: 1,
         skipped: Boolean(skipReason),
         skipReason,
         subject: subject ? sanitizeSubject(subject, config) : undefined,
         summary: summary ? redactReviewSummary(summary, config.security.secretPatterns) : undefined,
-        findings: findings.map((finding) => redactFinding(finding, config.security.secretPatterns))
+        findings: findings.map((finding) => redactFinding(finding, config.security.secretPatterns)),
+        diagnostics: safeConfigWarnings.length > 0 ? { configWarnings: safeConfigWarnings } : undefined
     };
 }
 async function writeReportJson(path, payload) {
@@ -48963,16 +48979,28 @@ function composeSetupSummary(options) {
         ["Annotations", options.emitAnnotations ? "Enabled" : "Disabled"],
         ["JSON report", options.reportJsonPath || "Disabled"],
         ["Rule policy", rulePolicyState(options.config)],
+        ["Configuration warnings", options.configWarnings.length === 0 ? "None" : String(options.configWarnings.length)],
         ["AI analysis", aiState(options.config, options.openAiApiKeyProvided)],
         ["Failure policy", options.failOnFindings ? "Fail on warning or error findings" : "Advisory; workflow does not fail on findings"]
     ];
-    return [
+    const lines = [
         "## Maintainer Firewall setup",
         "",
         "| Setting | Active state |",
         "| --- | --- |",
         ...rows.map(([setting, state]) => `| ${setup_summary_escapeTable(setting)} | ${setup_summary_escapeTable(state)} |`)
-    ].join("\n");
+    ];
+    if (options.configWarnings.length > 0) {
+        lines.push("");
+        lines.push("### Configuration warnings");
+        for (const warning of options.configWarnings.slice(0, 10)) {
+            lines.push(`- ${warning}`);
+        }
+        if (options.configWarnings.length > 10) {
+            lines.push(`- ${options.configWarnings.length - 10} additional warning${options.configWarnings.length === 11 ? "" : "s"} hidden.`);
+        }
+    }
+    return lines.join("\n");
 }
 function composeStepSummary(setupSummary, report) {
     return `${setupSummary}\n\n${report}`;
@@ -49288,6 +49316,7 @@ function github_client_getErrorMessage(error) {
 
 
 
+
 async function run() {
     const token = getInput("github-token", { required: true });
     const openAiApiKey = getInput("openai-api-key") || process.env.OPENAI_API_KEY;
@@ -49300,18 +49329,22 @@ async function run() {
     const octokit = getOctokit(token);
     const { owner, repo } = github_context.repo;
     const configRef = getConfigRef(github_context);
-    const config = await loadConfig(octokit, owner, repo, configPath, configRef);
-    for (const warning of validateConfig(config)) {
+    const configLoad = await loadConfigWithDiagnostics(octokit, owner, repo, configPath, configRef);
+    const config = configLoad.config;
+    const configWarnings = [...configLoad.warnings, ...validateConfig(config)]
+        .map((warning) => redactByPatterns(warning, config.security.secretPatterns));
+    for (const warning of configWarnings) {
         core_warning(warning);
     }
     const subject = await buildSubject(octokit, github_context, config.issue.duplicateSearchLimit);
     if (!subject) {
         const skipReason = `event ${github_context.eventName} is not handled`;
-        setSkippedOutputs(skipReason, reportJsonPath);
+        setSkippedOutputs(skipReason, reportJsonPath, configWarnings);
         const skippedReport = composeSkippedReport(null, skipReason, config);
         const setupSummary = composeSetupSummary({
             config,
             configPath,
+            configWarnings,
             dryRun,
             emitAnnotations,
             failOnFindings,
@@ -49326,17 +49359,18 @@ async function run() {
             });
         }
         if (reportJsonPath) {
-            await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(null, [], null, config, skipReason)));
+            await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(null, [], null, config, skipReason, configWarnings)));
         }
         return;
     }
     const skipReason = getSkipReason(subject, config);
     if (skipReason) {
-        setSkippedOutputs(skipReason, reportJsonPath);
+        setSkippedOutputs(skipReason, reportJsonPath, configWarnings);
         const skippedReport = composeSkippedReport(subject, skipReason, config);
         const setupSummary = composeSetupSummary({
             config,
             configPath,
+            configWarnings,
             dryRun,
             emitAnnotations,
             failOnFindings,
@@ -49351,7 +49385,7 @@ async function run() {
             });
         }
         if (reportJsonPath) {
-            await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(subject, [], null, config, skipReason)));
+            await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(subject, [], null, config, skipReason, configWarnings)));
         }
         if (!dryRun) {
             if (config.labeling.enabled && config.labeling.removeStale) {
@@ -49390,6 +49424,7 @@ async function run() {
     const setupSummary = composeSetupSummary({
         config,
         configPath,
+        configWarnings,
         dryRun,
         emitAnnotations,
         failOnFindings,
@@ -49397,7 +49432,7 @@ async function run() {
         reportJsonPath,
         subjectKind: subject.kind
     });
-    setCompletedOutputs(summary, findings, reportJsonPath);
+    setCompletedOutputs(summary, findings, reportJsonPath, configWarnings);
     if (emitAnnotations) {
         emitFindingAnnotations(findings, config);
     }
@@ -49427,7 +49462,7 @@ async function run() {
         info("Dry run enabled. No labels or comments were written.");
     }
     if (reportJsonPath) {
-        await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(subject, findings, summary, config)));
+        await tryWrite("write JSON report", () => writeReportJson(reportJsonPath, createReportPayload(subject, findings, summary, config, undefined, configWarnings)));
     }
     if (failOnFindings && shouldFail(findings)) {
         setFailed("Maintainer Firewall produced warning or error findings.");
@@ -49446,7 +49481,7 @@ function dedupeFindings(findings) {
     }
     return output;
 }
-function setSkippedOutputs(skipReason, reportJsonPath) {
+function setSkippedOutputs(skipReason, reportJsonPath, configWarnings = []) {
     setOutput("skipped", "true");
     setOutput("skip-reason", skipReason);
     setOutput("outcome", "skipped");
@@ -49455,8 +49490,10 @@ function setSkippedOutputs(skipReason, reportJsonPath) {
     setOutput("labels", "");
     setOutput("routing-hints", "[]");
     setOutput("report-json-path", reportJsonPath ?? "");
+    setOutput("config-warnings-count", String(configWarnings.length));
+    setOutput("config-warnings", JSON.stringify(configWarnings));
 }
-function setCompletedOutputs(summary, findings, reportJsonPath) {
+function setCompletedOutputs(summary, findings, reportJsonPath, configWarnings = []) {
     setOutput("skipped", "false");
     setOutput("skip-reason", "");
     setOutput("outcome", summary.outcome);
@@ -49465,6 +49502,8 @@ function setCompletedOutputs(summary, findings, reportJsonPath) {
     setOutput("labels", summary.labels.join(","));
     setOutput("routing-hints", JSON.stringify(summary.routingHints));
     setOutput("report-json-path", reportJsonPath ?? "");
+    setOutput("config-warnings-count", String(configWarnings.length));
+    setOutput("config-warnings", JSON.stringify(configWarnings));
 }
 function parseBoolean(value) {
     return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());

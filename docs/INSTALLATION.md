@@ -44,7 +44,7 @@ jobs:
   firewall:
     runs-on: ubuntu-latest
     steps:
-      - uses: wangjiehu/maintainer-firewall@v0.4.0
+      - uses: wangjiehu/maintainer-firewall@v0.5.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: true
@@ -105,6 +105,7 @@ The action redacts configured secret patterns before AI prompts and skips AI ana
 After the first successful run, confirm:
 
 - The setup table shows the intended event type and config path.
+- Configuration warnings are zero, or every warning is understood and intentional.
 - `dry-run` is still enabled for the first calibration run.
 - Comments are disabled or limited to findings, depending on your rollout mode.
 - Label writes are disabled or intentionally suppressed by dry-run.

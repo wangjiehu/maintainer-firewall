@@ -34,13 +34,13 @@ export function validateConfig(config: FirewallConfig): string[] {
 
 function invalidRegexWarnings(path: string, patterns: string[]): string[] {
   return patterns
-    .map((pattern) => {
+    .map((pattern, index) => {
       try {
         new RegExp(pattern);
         return null;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return `${path} contains an invalid regular expression "${pattern}": ${message}`;
+        return `${path}[${index}] contains an invalid regular expression: ${message}`;
       }
     })
     .filter((warning): warning is string => Boolean(warning));

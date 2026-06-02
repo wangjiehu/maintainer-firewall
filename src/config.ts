@@ -5,6 +5,11 @@ import type { FirewallConfig } from "./types.js";
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 
+export interface ConfigLoadResult {
+  config: FirewallConfig;
+  warnings: string[];
+}
+
 const MINIMUM_VALUES: Record<string, number> = {
   "config.issue.minBodyCharacters": 0,
   "config.issue.duplicateSearchLimit": 0,
@@ -163,6 +168,21 @@ export async function loadConfig(
   path: string,
   ref?: string
 ): Promise<FirewallConfig> {
+  const result = await loadConfigWithDiagnostics(octokit, owner, repo, path, ref);
+  for (const warning of result.warnings) {
+    core.warning(warning);
+  }
+
+  return result.config;
+}
+
+export async function loadConfigWithDiagnostics(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string
+): Promise<ConfigLoadResult> {
   try {
     const response = await octokit.rest.repos.getContent({
       owner,
@@ -172,26 +192,33 @@ export async function loadConfig(
     });
 
     if (Array.isArray(response.data) || response.data.type !== "file") {
-      core.warning(`${path} is not a file. Falling back to defaults.`);
-      return defaultConfig;
+      return {
+        config: defaultConfig,
+        warnings: [`${path} is not a file. Falling back to defaults.`]
+      };
     }
 
     const content = Buffer.from(response.data.content, "base64").toString("utf8");
     const parsed = parse(content) as Partial<FirewallConfig> | undefined;
-    for (const warning of configShapeWarnings(parsed ?? {})) {
-      core.warning(warning);
-    }
 
-    return mergeConfig(parsed ?? {});
+    return {
+      config: mergeConfig(parsed ?? {}),
+      warnings: configShapeWarnings(parsed ?? {})
+    };
   } catch (error) {
     const status = getErrorStatus(error);
     if (status === 404) {
       core.info(`No ${path} found. Using default Maintainer Firewall config.`);
-      return defaultConfig;
+      return {
+        config: defaultConfig,
+        warnings: []
+      };
     }
 
-    core.warning(`Failed to load ${path}: ${getErrorMessage(error)}. Using defaults.`);
-    return defaultConfig;
+    return {
+      config: defaultConfig,
+      warnings: [`Failed to load ${path}: ${getErrorMessage(error)}. Using defaults.`]
+    };
   }
 }
 

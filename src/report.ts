@@ -23,6 +23,9 @@ export interface ReportPayload {
   };
   summary?: ReviewSummary;
   findings: Finding[];
+  diagnostics?: {
+    configWarnings: string[];
+  };
 }
 
 export function createReportPayload(
@@ -30,15 +33,18 @@ export function createReportPayload(
   findings: Finding[],
   summary: ReviewSummary | null,
   config: FirewallConfig,
-  skipReason?: string
+  skipReason?: string,
+  configWarnings: string[] = []
 ): ReportPayload {
+  const safeConfigWarnings = configWarnings.map((warning) => redactByPatterns(warning, config.security.secretPatterns));
   return {
     version: 1,
     skipped: Boolean(skipReason),
     skipReason,
     subject: subject ? sanitizeSubject(subject, config) : undefined,
     summary: summary ? redactReviewSummary(summary, config.security.secretPatterns) : undefined,
-    findings: findings.map((finding) => redactFinding(finding, config.security.secretPatterns))
+    findings: findings.map((finding) => redactFinding(finding, config.security.secretPatterns)),
+    diagnostics: safeConfigWarnings.length > 0 ? { configWarnings: safeConfigWarnings } : undefined
   };
 }
 

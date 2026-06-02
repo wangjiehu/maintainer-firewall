@@ -4,7 +4,7 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 
 ## Flow
 
-1. Load configuration from the base ref.
+1. Load configuration from the base ref and collect load-shape diagnostics.
 2. Build an issue or pull request subject from the GitHub event.
 3. Apply ignore rules.
 4. Run deterministic rules.
@@ -16,7 +16,7 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 10. Redact report-facing finding and summary fields.
 11. Set action outputs and optionally emit GitHub Actions annotations for findings.
 12. Compose a maintainer-only setup summary for the Actions step summary.
-13. Write logs, step summary, optional JSON report, labels, and comment.
+13. Write logs, step summary, optional JSON report with diagnostics, labels, and comment.
 
 ## Design Principles
 
@@ -31,6 +31,7 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 - The setup summary is kept out of issue and pull request comments so contributor-facing reports stay focused.
 - Finding policy uses exact IDs to avoid broad accidental suppression.
 - Possible credential findings remain protected and cannot be suppressed or downgraded.
+- Configuration diagnostics are redacted before being exposed through outputs, step summaries, or JSON reports.
 
 ## Main Modules
 

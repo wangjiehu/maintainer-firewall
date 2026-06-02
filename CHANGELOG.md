@@ -2,6 +2,14 @@
 
 All notable changes to Maintainer Firewall will be documented in this file.
 
+## 0.5.0 - Configuration Diagnostics Visibility
+
+- Captures configuration loading and validation warnings as first-class diagnostics.
+- Shows configuration warning counts and warning details in the Actions step summary setup table.
+- Adds `config-warnings-count` and `config-warnings` outputs for downstream workflow steps.
+- Adds configuration diagnostics to structured JSON reports.
+- Redacts configuration diagnostics before exposing them through summaries, outputs, or JSON reports.
+
 ## 0.4.0 - Rule Policy Tuning
 
 - Adds `rules.disabled` for suppressing exact finding IDs across comments, labels, annotations, JSON reports, summaries, and failure checks.

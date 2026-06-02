@@ -69,6 +69,7 @@ Deterministic rules still run without AI.
 ## Config Warnings
 
 The action normalizes invalid or below-minimum config values to safe defaults and emits workflow warnings.
+The same configuration diagnostics are also visible in the Actions step summary, the `config-warnings-count` and `config-warnings` outputs, and structured JSON reports when `report-json-path` is configured.
 
 Common examples:
 

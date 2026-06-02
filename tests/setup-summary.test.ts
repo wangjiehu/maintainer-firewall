@@ -21,6 +21,9 @@ describe("composeSetupSummary", () => {
         }
       },
       configPath: ".maintainer-firewall.yml",
+      configWarnings: [
+        "config.rules.disabled[0] should be a string; using the default value for config.rules.disabled."
+      ],
       dryRun: true,
       emitAnnotations: true,
       failOnFindings: false,
@@ -36,6 +39,9 @@ describe("composeSetupSummary", () => {
     expect(summary).toContain("| Annotations | Enabled |");
     expect(summary).toContain("| JSON report | reports/firewall.json |");
     expect(summary).toContain("| Rule policy | 1 disabled; 1 severity override |");
+    expect(summary).toContain("| Configuration warnings | 1 |");
+    expect(summary).toContain("### Configuration warnings");
+    expect(summary).toContain("config.rules.disabled[0] should be a string");
     expect(summary).toContain("Configured, but no API key was provided");
     expect(summary).not.toContain("OPENAI_API_KEY");
   });

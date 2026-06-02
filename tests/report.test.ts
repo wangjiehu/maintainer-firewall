@@ -66,4 +66,25 @@ describe("createReportPayload", () => {
     expect(serialized).not.toContain(secret);
     expect(serialized).toContain("[redacted]");
   });
+
+  it("includes redacted configuration diagnostics when present", () => {
+    const secret = "sk-abc12345678901234567890";
+    const subject: IssueSubject = {
+      kind: "issue",
+      number: 1,
+      title: "Bug report",
+      body: "body",
+      author: "reporter",
+      labels: [],
+      htmlUrl: "https://github.com/example/repo/issues/1",
+      duplicateCandidates: []
+    };
+
+    const payload = createReportPayload(subject, [], null, defaultConfig, undefined, [
+      `config.rules.disabled contains ${secret}`
+    ]);
+
+    expect(payload.diagnostics?.configWarnings).toEqual(["config.rules.disabled contains [redacted]"]);
+    expect(JSON.stringify(payload)).not.toContain(secret);
+  });
 });
