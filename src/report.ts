@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Finding, FirewallConfig, ReviewSummary, Subject } from "./types.js";
-import { redactByPatterns } from "./redaction.js";
+import { redactByPatterns, redactFinding, redactReviewSummary } from "./redaction.js";
 
 export interface ReportPayload {
   version: 1;
@@ -37,8 +37,8 @@ export function createReportPayload(
     skipped: Boolean(skipReason),
     skipReason,
     subject: subject ? sanitizeSubject(subject, config) : undefined,
-    summary: summary ?? undefined,
-    findings
+    summary: summary ? redactReviewSummary(summary, config.security.secretPatterns) : undefined,
+    findings: findings.map((finding) => redactFinding(finding, config.security.secretPatterns))
   };
 }
 

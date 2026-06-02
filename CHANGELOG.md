@@ -2,6 +2,12 @@
 
 All notable changes to Maintainer Firewall will be documented in this file.
 
+## 0.1.10 - Report Redaction Coverage
+
+- Redacts configured secret patterns from finding titles, details, suggestions, summary headlines, next steps, passed checks, and routing hint files.
+- Applies the same redaction helper to both GitHub comments and structured JSON reports.
+- Adds redaction, comment, and report tests for finding and summary fields.
+
 ## 0.1.9 - Comment Lookup Resilience
 
 - Keeps runs from failing when GitHub cannot list existing report comments during clean-report or skipped-report refresh checks.

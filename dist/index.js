@@ -45044,6 +45044,27 @@ function redactByPatterns(value, patterns, replacement = "[redacted]") {
         }
     }, value);
 }
+function redactFinding(finding, patterns) {
+    return {
+        ...finding,
+        title: redactByPatterns(finding.title, patterns),
+        details: redactByPatterns(finding.details, patterns),
+        suggestion: finding.suggestion ? redactByPatterns(finding.suggestion, patterns) : undefined
+    };
+}
+function redactReviewSummary(summary, patterns) {
+    return {
+        ...summary,
+        headline: redactByPatterns(summary.headline, patterns),
+        nextSteps: summary.nextSteps.map((step) => redactByPatterns(step, patterns)),
+        passedChecks: summary.passedChecks.map((check) => redactByPatterns(check, patterns)),
+        routingHints: summary.routingHints.map((hint) => ({
+            ...hint,
+            owner: redactByPatterns(hint.owner, patterns),
+            files: hint.files.map((file) => redactByPatterns(file, patterns))
+        }))
+    };
+}
 
 ;// CONCATENATED MODULE: ./src/ai.ts
 
@@ -48034,39 +48055,42 @@ function passedChecksForSubject(subject, findings, config) {
 
 ;// CONCATENATED MODULE: ./src/comment.ts
 
+
 const MARKER = "<!-- maintainer-firewall:report -->";
 function composeReport(subject, findings, config, summary) {
     const title = config.comment.header;
-    const visibleFindings = findings.slice(0, config.comment.maxFindings);
-    const hiddenFindingCount = Math.max(0, findings.length - visibleFindings.length);
+    const safeFindings = findings.map((finding) => redactFinding(finding, config.security.secretPatterns));
+    const safeSummary = redactReviewSummary(summary, config.security.secretPatterns);
+    const visibleFindings = safeFindings.slice(0, config.comment.maxFindings);
+    const hiddenFindingCount = Math.max(0, safeFindings.length - visibleFindings.length);
     const lines = [
         MARKER,
         `## ${title}`,
         "",
-        `**Outcome:** ${outcomeLabel(summary.outcome)}`,
-        `**Review readiness:** ${summary.score}/100`,
+        `**Outcome:** ${outcomeLabel(safeSummary.outcome)}`,
+        `**Review readiness:** ${safeSummary.score}/100`,
         "",
         `Subject: [${subject.kind === "issue" ? "Issue" : "Pull request"} #${subject.number}](${subject.htmlUrl})`,
         "",
-        summary.headline,
+        safeSummary.headline,
         ""
     ];
-    if (findings.length === 0) {
+    if (safeFindings.length === 0) {
         lines.push("No action is needed from this automated check.");
-        appendPassedChecks(lines, config, summary);
-        appendRoutingHints(lines, summary);
+        appendPassedChecks(lines, config, safeSummary);
+        appendRoutingHints(lines, safeSummary);
         lines.push("");
         lines.push("_Review readiness is an advisory triage score, not a judgment of contributor quality. Maintainer Firewall does not decide whether text was AI-generated._");
         return lines.join("\n");
     }
     lines.push("### Next steps");
     lines.push("");
-    for (const step of summary.nextSteps) {
+    for (const step of safeSummary.nextSteps) {
         lines.push(`- ${step}`);
     }
     lines.push("");
     lines.push("<details>");
-    lines.push(`<summary>${findings.length} finding${findings.length === 1 ? "" : "s"} from enabled checks</summary>`);
+    lines.push(`<summary>${safeFindings.length} finding${safeFindings.length === 1 ? "" : "s"} from enabled checks</summary>`);
     lines.push("");
     lines.push("| Severity | Source | Finding | Suggested next step |");
     lines.push("| --- | --- | --- | --- |");
@@ -48078,12 +48102,12 @@ function composeReport(subject, findings, config, summary) {
     }
     lines.push("");
     lines.push("</details>");
-    appendPassedChecks(lines, config, summary);
-    appendRoutingHints(lines, summary);
+    appendPassedChecks(lines, config, safeSummary);
+    appendRoutingHints(lines, safeSummary);
     lines.push("");
-    if (summary.labels.length > 0) {
+    if (safeSummary.labels.length > 0) {
         lines.push("Suggested labels:");
-        lines.push(summary.labels.map((label) => `- \`${label}\``).join("\n"));
+        lines.push(safeSummary.labels.map((label) => `- \`${label}\``).join("\n"));
     }
     lines.push("");
     lines.push("_Review readiness is an advisory triage score, not a judgment of contributor quality. Maintainer Firewall does not decide whether text was AI-generated._");
@@ -48559,8 +48583,8 @@ function createReportPayload(subject, findings, summary, config, skipReason) {
         skipped: Boolean(skipReason),
         skipReason,
         subject: subject ? sanitizeSubject(subject, config) : undefined,
-        summary: summary ?? undefined,
-        findings
+        summary: summary ? redactReviewSummary(summary, config.security.secretPatterns) : undefined,
+        findings: findings.map((finding) => redactFinding(finding, config.security.secretPatterns))
     };
 }
 async function writeReportJson(path, payload) {

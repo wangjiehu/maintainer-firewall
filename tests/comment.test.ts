@@ -64,6 +64,37 @@ describe("composeReport", () => {
     expect(report).toContain("Routing hints:");
     expect(report).toContain("@docs: README.md");
   });
+
+  it("redacts configured secret patterns from findings and summary text", () => {
+    const secret = "sk-abc12345678901234567890";
+    const findings: Finding[] = [
+      {
+        id: "ai.secret",
+        severity: "warning",
+        title: `Token ${secret}`,
+        details: `Details mention ${secret}`,
+        suggestion: `Rotate ${secret}`,
+        label: "securityReview",
+        source: "ai"
+      }
+    ];
+    const summary = {
+      ...createReviewSummary(subject, findings, defaultConfig),
+      headline: `Headline mentions ${secret}`,
+      nextSteps: [`Next step mentions ${secret}`],
+      routingHints: [
+        {
+          owner: "@security",
+          files: [`src/${secret}.ts`]
+        }
+      ]
+    };
+
+    const report = composeReport(subject, findings, defaultConfig, summary);
+
+    expect(report).not.toContain(secret);
+    expect(report).toContain("[redacted]");
+  });
 });
 
 describe("composeSkippedReport", () => {

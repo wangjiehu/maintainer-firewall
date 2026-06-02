@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultConfig } from "../src/config.js";
 import { createReportPayload } from "../src/report.js";
-import type { IssueSubject } from "../src/types.js";
+import type { Finding, IssueSubject, ReviewSummary } from "../src/types.js";
 
 describe("createReportPayload", () => {
   it("omits body content and redacts configured secrets from titles", () => {
@@ -20,5 +20,50 @@ describe("createReportPayload", () => {
 
     expect(JSON.stringify(payload)).not.toContain("secret body");
     expect(payload.subject?.title).toBe("Leaked [redacted]");
+  });
+
+  it("redacts configured secrets from findings and summary fields", () => {
+    const secret = "sk-abc12345678901234567890";
+    const subject: IssueSubject = {
+      kind: "issue",
+      number: 1,
+      title: "Bug report",
+      body: "body",
+      author: "reporter",
+      labels: [],
+      htmlUrl: "https://github.com/example/repo/issues/1",
+      duplicateCandidates: []
+    };
+    const findings: Finding[] = [
+      {
+        id: "ai.secret",
+        severity: "warning",
+        title: `Token ${secret}`,
+        details: `Details mention ${secret}`,
+        suggestion: `Rotate ${secret}`,
+        label: "securityReview",
+        source: "ai"
+      }
+    ];
+    const summary: ReviewSummary = {
+      score: 70,
+      outcome: "needs_maintainer_review",
+      headline: `Headline mentions ${secret}`,
+      nextSteps: [`Next step mentions ${secret}`],
+      passedChecks: [`Check mentions ${secret}`],
+      labels: ["security-review"],
+      routingHints: [
+        {
+          owner: "@security",
+          files: [`src/${secret}.ts`]
+        }
+      ]
+    };
+
+    const payload = createReportPayload(subject, findings, summary, defaultConfig);
+    const serialized = JSON.stringify(payload);
+
+    expect(serialized).not.toContain(secret);
+    expect(serialized).toContain("[redacted]");
   });
 });
