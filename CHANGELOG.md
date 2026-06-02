@@ -2,6 +2,12 @@
 
 All notable changes to Maintainer Firewall will be documented in this file.
 
+## 0.1.11 - Documentation Alignment
+
+- Moves shipped CODEOWNERS routing, repository guidance, schema guidance, reports, and AI guardrails out of near-term roadmap items.
+- Updates architecture docs to describe report redaction coverage and GitHub API fallback behavior.
+- Adds documentation consistency tests for roadmap and architecture coverage.
+
 ## 0.1.10 - Report Redaction Coverage
 
 - Redacts configured secret patterns from finding titles, details, suggestions, summary headlines, next steps, passed checks, and routing hint files.

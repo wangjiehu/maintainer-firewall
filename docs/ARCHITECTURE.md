@@ -10,9 +10,10 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 4. Run deterministic rules.
 5. Skip AI analysis if a possible secret is detected.
 6. Load repository guidance and CODEOWNERS hints when needed.
-7. Run optional AI analysis with timeout, input truncation, output limits, and redaction.
+7. Run optional AI analysis with timeout, input truncation, output normalization, and redaction.
 8. Create a review summary with outcome, score, next steps, labels, and routing hints.
-9. Write outputs, step summary, optional JSON report, labels, and comment.
+9. Redact report-facing finding and summary fields.
+10. Write outputs, step summary, optional JSON report, labels, and comment.
 
 ## Design Principles
 
@@ -22,6 +23,7 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 - Possible credentials are not repeated in findings or structured reports.
 - The action does not check out pull request code.
 - Label and comment writes are best-effort so triage does not fail because of permission differences.
+- Pull request file listing and existing report comment lookup degrade to warnings so body/title triage can continue.
 
 ## Main Modules
 
@@ -29,6 +31,7 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 - `src/rules.ts`: deterministic issue and pull request findings.
 - `src/review.ts`: outcome, score, passed checks, next steps, and routing model.
 - `src/comment.ts`: Markdown report rendering and comment policy.
+- `src/redaction.ts`: shared redaction helpers for subjects, findings, summaries, comments, and JSON reports.
 - `src/ai.ts`: optional OpenAI Responses API integration.
 - `src/guidance.ts`: repository guidance loading.
 - `src/codeowners.ts`: best-effort CODEOWNERS routing hints.

@@ -1,12 +1,19 @@
 # Roadmap
 
+## Shipped
+
+- Low-noise issue and pull request triage with comments, labels, step summaries, and structured JSON reports.
+- CODEOWNERS-aware routing hints for pull requests.
+- Repository guidance loading from `CONTRIBUTING.md`, pull request templates, and issue templates.
+- Optional OpenAI-assisted semantic review with timeout, truncation, response normalization, and redaction.
+- Configuration schema guidance with editor descriptions and runtime shape warnings.
+
 ## Near Term
 
 - GitHub App packaging for teams that want central configuration.
-- Project-specific rule extraction from `CONTRIBUTING.md` and templates.
-- Optional CODEOWNERS-aware routing hints.
+- Deeper project-specific rule extraction from `CONTRIBUTING.md` and templates into deterministic checks.
 - Better duplicate detection using embeddings when AI is enabled.
-- SARIF or step-summary output for teams that prefer check annotations over comments.
+- SARIF or check annotation output for teams that prefer native code-scanning style surfaces over comments.
 
 ## Later
 
