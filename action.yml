@@ -3,33 +3,33 @@ description: Filter noisy issues and pull requests by evidence, reproducibility,
 author: maintainer-firewall
 inputs:
   github-token:
-    description: GitHub token used to read the repository and write labels/comments.
+    description: GitHub token used to read repository context and, when not in dry-run mode, write labels/comments.
     required: true
   openai-api-key:
-    description: Optional OpenAI API key. When omitted, only deterministic rules run.
+    description: Optional OpenAI API key. Required only when ai.enabled is true; otherwise deterministic rules still run.
     required: false
   config-path:
-    description: Path to the Maintainer Firewall YAML config.
+    description: Path to the Maintainer Firewall YAML config in the repository.
     required: false
     default: .maintainer-firewall.yml
   dry-run:
-    description: When true, prints the report without writing labels or comments.
+    description: When true, produces reports and outputs without writing labels, comments, or stale-label removals.
     required: false
     default: "false"
   fail-on-findings:
-    description: When true, fails the workflow if warning or error findings are produced.
+    description: When true, fails the workflow if warning or error findings are produced. Defaults to advisory mode.
     required: false
     default: "false"
   write-step-summary:
-    description: When true, writes the report to the GitHub Actions step summary.
+    description: When true, writes the report to the GitHub Actions step summary for easy inspection.
     required: false
     default: "true"
   report-json-path:
-    description: Optional path where a structured JSON report should be written.
+    description: Optional workspace-relative path where a structured JSON report should be written for downstream steps.
     required: false
 outputs:
   outcome:
-    description: Review-readiness outcome, such as ready, needs_info, or needs_tests.
+    description: Review-readiness outcome such as ready, needs_info, needs_tests, needs_maintainer_review, blocked, or skipped.
   score:
     description: Review-readiness score from 0 to 100.
   findings-count:

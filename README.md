@@ -63,7 +63,7 @@ jobs:
   firewall:
     runs-on: ubuntu-latest
     steps:
-      - uses: wangjiehu/maintainer-firewall@v0.1.5
+      - uses: wangjiehu/maintainer-firewall@v0.1.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -79,7 +79,7 @@ The `labeled` and `unlabeled` events let ignore labels such as `skip-firewall` a
 Set `report-json-path` when another workflow step should consume a structured report:
 
 ```yaml
-      - uses: wangjiehu/maintainer-firewall@v0.1.5
+      - uses: wangjiehu/maintainer-firewall@v0.1.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-json-path: maintainer-firewall-report.json
@@ -102,7 +102,7 @@ Do not combine `pull_request_target`, write permissions, and a checkout of untru
 Maintainer Firewall works without an OpenAI API key. To enable AI-assisted semantic checks, set `ai.enabled: true` in `.maintainer-firewall.yml` and pass an API key:
 
 ```yaml
-      - uses: wangjiehu/maintainer-firewall@v0.1.5
+      - uses: wangjiehu/maintainer-firewall@v0.1.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -117,7 +117,7 @@ When AI analysis is enabled, Maintainer Firewall also loads configured repositor
 Start in dry-run mode if you want to inspect reports without writing comments or labels:
 
 ```yaml
-      - uses: wangjiehu/maintainer-firewall@v0.1.5
+      - uses: wangjiehu/maintainer-firewall@v0.1.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: true
@@ -126,6 +126,18 @@ Start in dry-run mode if you want to inspect reports without writing comments or
 For early adoption, keep `comment.enabled: true` and `labeling.enabled: false` so contributors see useful next steps without changing your existing label workflow.
 
 If you need comments on every run, set `comment.postWhen: always`. For output-only operation, set `comment.postWhen: never`.
+
+## Inputs
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `github-token` | Yes |  | GitHub token used to read repository context and, outside dry-run mode, write labels/comments. |
+| `openai-api-key` | No |  | Optional OpenAI API key. Required only when `ai.enabled: true`; deterministic rules run without it. |
+| `config-path` | No | `.maintainer-firewall.yml` | Path to the Maintainer Firewall YAML config in the repository. |
+| `dry-run` | No | `false` | Produce reports and outputs without writing labels, comments, or stale-label removals. |
+| `fail-on-findings` | No | `false` | Fail the workflow when warning or error findings are produced. By default the action is advisory. |
+| `write-step-summary` | No | `true` | Write the report to the GitHub Actions step summary. |
+| `report-json-path` | No |  | Workspace-relative path where a structured JSON report should be written for downstream steps. |
 
 ## Outputs
 
@@ -287,8 +299,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internal flow and saf
 ```bash
 npm run check
 npm run verify:dist
-git tag v0.1.5
-git push origin main v0.1.5
+git tag v0.1.6
+git push origin main v0.1.6
 ```
 
 The release workflow publishes GitHub release notes for `v*` tags.

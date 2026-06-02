@@ -2,6 +2,12 @@
 
 All notable changes to Maintainer Firewall will be documented in this file.
 
+## 0.1.6 - Action Metadata Guidance
+
+- Clarifies Marketplace-facing action input descriptions for dry-run behavior, advisory failures, summaries, and JSON reports.
+- Adds a README inputs table so workflow authors can scan every supported input without opening `action.yml`.
+- Adds action metadata tests that keep declared inputs, outputs, defaults, and README tables aligned.
+
 ## 0.1.5 - Schema Guidance
 
 - Adds descriptions, defaults, examples, and enum guidance to the YAML configuration schema so editors can explain settings inline.
