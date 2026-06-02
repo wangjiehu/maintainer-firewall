@@ -20,6 +20,10 @@ inputs:
     description: When true, fails the workflow if warning or error findings are produced. Defaults to advisory mode.
     required: false
     default: "false"
+  emit-annotations:
+    description: When true, emits each finding as a GitHub Actions notice, warning, or error annotation.
+    required: false
+    default: "false"
   write-step-summary:
     description: When true, writes the report to the GitHub Actions step summary for easy inspection.
     required: false

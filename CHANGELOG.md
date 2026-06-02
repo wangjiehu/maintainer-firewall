@@ -2,6 +2,13 @@
 
 All notable changes to Maintainer Firewall will be documented in this file.
 
+## 0.2.0 - Workflow Annotations
+
+- Adds an `emit-annotations` input for optional GitHub Actions notice, warning, and error annotations for findings.
+- Redacts, compacts, and truncates annotation text before emitting it.
+- Documents annotation output in README, ROADMAP, and Architecture docs.
+- Adds annotation tests and updates action metadata coverage for the new input.
+
 ## 0.1.11 - Documentation Alignment
 
 - Moves shipped CODEOWNERS routing, repository guidance, schema guidance, reports, and AI guardrails out of near-term roadmap items.

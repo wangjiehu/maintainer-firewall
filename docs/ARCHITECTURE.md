@@ -13,7 +13,8 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 7. Run optional AI analysis with timeout, input truncation, output normalization, and redaction.
 8. Create a review summary with outcome, score, next steps, labels, and routing hints.
 9. Redact report-facing finding and summary fields.
-10. Write outputs, step summary, optional JSON report, labels, and comment.
+10. Set action outputs and optionally emit GitHub Actions annotations for findings.
+11. Write logs, step summary, optional JSON report, labels, and comment.
 
 ## Design Principles
 
@@ -24,10 +25,12 @@ Maintainer Firewall is built as a GitHub JavaScript Action with a small determin
 - The action does not check out pull request code.
 - Label and comment writes are best-effort so triage does not fail because of permission differences.
 - Pull request file listing and existing report comment lookup degrade to warnings so body/title triage can continue.
+- Native workflow annotations are opt-in to keep the default experience low-noise.
 
 ## Main Modules
 
 - `src/index.ts`: action entry point and orchestration.
+- `src/annotations.ts`: optional GitHub Actions annotation emission.
 - `src/rules.ts`: deterministic issue and pull request findings.
 - `src/review.ts`: outcome, score, passed checks, next steps, and routing model.
 - `src/comment.ts`: Markdown report rendering and comment policy.

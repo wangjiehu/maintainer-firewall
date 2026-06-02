@@ -31,6 +31,7 @@ const expectedInputs: Record<string, Pick<ActionField, "required" | "default">> 
   "config-path": { required: false, default: ".maintainer-firewall.yml" },
   "dry-run": { required: false, default: "false" },
   "fail-on-findings": { required: false, default: "false" },
+  "emit-annotations": { required: false, default: "false" },
   "write-step-summary": { required: false, default: "true" },
   "report-json-path": { required: false }
 };

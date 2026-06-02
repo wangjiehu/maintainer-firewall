@@ -37641,7 +37641,7 @@ function utils_toCommandValue(input) {
  * @returns The command properties to send with the actual annotation command
  * See IssueCommandProperties: https://github.com/actions/runner/blob/main/src/Runner.Worker/ActionCommandManager.cs#L646
  */
-function utils_toCommandProperties(annotationProperties) {
+function toCommandProperties(annotationProperties) {
     if (!Object.keys(annotationProperties).length) {
         return {};
     }
@@ -40452,7 +40452,7 @@ function core_debug(message) {
  * @param properties optional properties to add to the annotation.
  */
 function error(message, properties = {}) {
-    command_issueCommand('error', utils_toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+    command_issueCommand('error', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
  * Adds a warning issue
@@ -40460,7 +40460,7 @@ function error(message, properties = {}) {
  * @param properties optional properties to add to the annotation.
  */
 function core_warning(message, properties = {}) {
-    command_issueCommand('warning', utils_toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+    command_issueCommand('warning', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
  * Adds a notice issue
@@ -40468,7 +40468,7 @@ function core_warning(message, properties = {}) {
  * @param properties optional properties to add to the annotation.
  */
 function notice(message, properties = {}) {
-    issueCommand('notice', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+    command_issueCommand('notice', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
  * Writes info to log with console.log.
@@ -45301,6 +45301,42 @@ function extractOutputText(data) {
     return chunks.join("\n");
 }
 
+;// CONCATENATED MODULE: ./src/annotations.ts
+
+
+const MAX_ANNOTATION_TITLE_CHARACTERS = 255;
+const MAX_ANNOTATION_MESSAGE_CHARACTERS = 1000;
+function emitFindingAnnotations(findings, config) {
+    for (const finding of findings.map((item) => redactFinding(item, config.security.secretPatterns))) {
+        const title = truncateSingleLine(`Maintainer Firewall: ${finding.title}`, MAX_ANNOTATION_TITLE_CHARACTERS);
+        const message = truncateSingleLine(annotationMessage(finding), MAX_ANNOTATION_MESSAGE_CHARACTERS);
+        const properties = { title };
+        if (finding.severity === "error") {
+            error(message, properties);
+            continue;
+        }
+        if (finding.severity === "warning") {
+            core_warning(message, properties);
+            continue;
+        }
+        notice(message, properties);
+    }
+}
+function annotationMessage(finding) {
+    const parts = [
+        `${finding.title}: ${finding.details}`,
+        finding.suggestion ? `Suggested next step: ${finding.suggestion}` : undefined
+    ];
+    return parts.filter(Boolean).join(" ");
+}
+function truncateSingleLine(value, maxCharacters) {
+    const compacted = value.replace(/\s+/g, " ").trim();
+    if (compacted.length <= maxCharacters) {
+        return compacted;
+    }
+    return `${compacted.slice(0, Math.max(0, maxCharacters - 14))}...[truncated]`;
+}
+
 ;// CONCATENATED MODULE: ./node_modules/balanced-match/dist/esm/index.js
 const balanced = (a, b, str) => {
     const ma = a instanceof RegExp ? maybeMatch(a, str) : a;
@@ -49112,12 +49148,14 @@ function github_client_getErrorMessage(error) {
 
 
 
+
 async function run() {
     const token = getInput("github-token", { required: true });
     const openAiApiKey = getInput("openai-api-key") || process.env.OPENAI_API_KEY;
     const configPath = getInput("config-path") || ".maintainer-firewall.yml";
     const dryRun = parseBoolean(getInput("dry-run"));
     const failOnFindings = parseBoolean(getInput("fail-on-findings"));
+    const emitAnnotations = parseBoolean(getInput("emit-annotations"));
     const writeStepSummary = parseBoolean(getInput("write-step-summary") || "true");
     const reportJsonPath = getInput("report-json-path");
     const octokit = getOctokit(token);
@@ -49191,6 +49229,9 @@ async function run() {
     const summary = createReviewSummary(subject, findings, config, routingHints);
     const report = composeReport(subject, findings, config, summary);
     setCompletedOutputs(summary, findings, reportJsonPath);
+    if (emitAnnotations) {
+        emitFindingAnnotations(findings, config);
+    }
     info(report);
     if (writeStepSummary) {
         await tryWrite("write step summary", async () => {

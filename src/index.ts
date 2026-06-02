@@ -1,6 +1,7 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { analyzeWithAi } from "./ai.js";
+import { emitFindingAnnotations } from "./annotations.js";
 import { loadCodeOwnerHints } from "./codeowners.js";
 import {
   composeReport,
@@ -27,6 +28,7 @@ async function run(): Promise<void> {
   const configPath = core.getInput("config-path") || ".maintainer-firewall.yml";
   const dryRun = parseBoolean(core.getInput("dry-run"));
   const failOnFindings = parseBoolean(core.getInput("fail-on-findings"));
+  const emitAnnotations = parseBoolean(core.getInput("emit-annotations"));
   const writeStepSummary = parseBoolean(core.getInput("write-step-summary") || "true");
   const reportJsonPath = core.getInput("report-json-path");
 
@@ -126,6 +128,9 @@ async function run(): Promise<void> {
   const report = composeReport(subject, findings, config, summary);
 
   setCompletedOutputs(summary, findings, reportJsonPath);
+  if (emitAnnotations) {
+    emitFindingAnnotations(findings, config);
+  }
 
   core.info(report);
   if (writeStepSummary) {
