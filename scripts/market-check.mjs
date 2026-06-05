@@ -21,6 +21,7 @@ const requiredFiles = [
 
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const readme = readFileSync("README.md", "utf8");
+const metricsWorkflow = readFileSync("examples/workflow.metrics.yml", "utf8");
 const marketplaceReadiness = readFileSync("docs/MARKETPLACE_READINESS.md", "utf8");
 const vitestConfig = readFileSync("vitest.config.ts", "utf8");
 
@@ -71,6 +72,14 @@ if (!packageJson.scripts?.["market:check"]?.includes("npm run ci")) {
 
 if (!marketplaceReadiness.includes("GitHub Marketplace has repository-level listing requirements")) {
   throw new Error("docs/MARKETPLACE_READINESS.md should document the direct Marketplace listing caveat.");
+}
+
+if (metricsWorkflow.includes("actions/upload-artifact@v4")) {
+  throw new Error("examples/workflow.metrics.yml should use the current upload-artifact major version.");
+}
+
+if (!metricsWorkflow.includes("actions/upload-artifact@v7")) {
+  throw new Error("examples/workflow.metrics.yml should include the current upload-artifact example.");
 }
 
 for (const fixture of [

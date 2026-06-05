@@ -52,6 +52,8 @@ jobs:
 
 After the first run, inspect the step summary. It now shows both the review report and a setup table that confirms active surfaces such as dry-run, comments, labels, annotations, JSON report output, effective config output, diagnostics, AI status, and failure policy.
 
+For production workflows, keep the Maintainer Firewall reference on a release tag such as `v0.7.0`. If your organization requires stricter supply-chain controls, pin third-party helper actions in the same workflow to full commit SHAs after choosing their release versions.
+
 ## Fork Pull Requests
 
 Use `pull_request_target` only when you need the action to comment on pull requests from forks.
